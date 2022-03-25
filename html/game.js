@@ -6,6 +6,7 @@ canvas.width = 600;
 canvas.height = 600;
 
 let qcArr = [];
+let entities = [];
 
 let ws = new WebSocket("ws://" + location.host + ":3012");
 ws.binaryType = "arraybuffer";
@@ -22,7 +23,10 @@ let player = {
 }
 
 let controls = {
-	dir: [0,0,0,0],
+	dirn: 0,
+	dire: 0,
+	dirs: 0,
+	dirw: 0,
 	a: 0,
 	b: 0
 };
@@ -90,22 +94,40 @@ function movePlayer() {
 }
 
 function step(sc) {
-	player.vx = velChange(player.vx, player.drag, 2);
-	player.vy = velChange(player.vy, player.drag, 2);
-	player.vx += (controls.dir[1] - controls.dir[3]) / 8;
-	player.vy += (controls.dir[2] - controls.dir[0]) / 8;
+	if (player.vx != 0 || player.vy != 0) {
+		let vmag = Math.sqrt(player.vx ** 2 + player.vy ** 2);
+		let change = velChange(vmag, player.drag, 2) / vmag;
+		player.vx *= change;
+		player.vy *= change;
+	}
+//	player.vx = velChange(player.vx, player.drag, 2);
+//	player.vy = velChange(player.vy, player.drag, 2);
+	let cdx = (controls.dire & 1) - (controls.dirw & 1);
+	let cdy = (controls.dirs & 1) - (controls.dirn & 1);
+	let bofum = [1, 1.4][+(cdx != 0 && cdy != 0)];
+	player.vx += cdx / 8 / bofum;
+	player.vy += cdy / 8 / bofum;
 	movePlayer();
 	clearWcol((player.x & 127) ^ 64);
 	clearWrow((player.y & 127) ^ 64);
+	if (controls.b == 1) {
+		qcBreak(player.x + cdx, player.y + cdy);
+	}
 	if (sc % 4 == 0) {
+		qcSetloc();
+		qcGetEntities();
 		qcGetTiles(10 + Math.floor(10 * Math.max(Math.abs(player.vx), Math.abs(player.vy))));
-		qcSend();
+	}
+	qcSend();
+	for (let key in controls) {
+		if (controls[key] < 254)
+			controls[key] += 2;
 	}
 }
 
 function draw() { // i don't know what these stand for, even though i just made them
 	let ts = 8; // does what the acronym stand for matter
-	ts = 16 - (4 * Math.max(Math.abs(player.vx), Math.abs(player.vy)));
+	ts = 16 - 2 * Math.sqrt(player.vx ** 2 + player.vy ** 2);
 	let xba = canvas.width / ts / 2; // what truly matters in life?
 	let yba = canvas.height / ts / 2; // not the acronym
 	// but ts is tile width/height in pixels
@@ -117,7 +139,14 @@ function draw() { // i don't know what these stand for, even though i just made 
 		let cy = (dy - player.y) * ts + canvas.height / 2;
 		ctx.beginPath();
 		ctx.fillStyle = tile == 0 ? "#000" : tile == 0x80 ? "#888480" : tile == 0x81 ? "#444" : "#ff0";
-		ctx.fillRect(Math.floor(cx), Math.floor(cy), ts, ts);
+		ctx.fillRect(Math.floor(cx), Math.floor(cy), Math.floor(cx + ts) - Math.floor(cx), Math.floor(cy + ts) - Math.floor(cy));
+		ctx.closePath();
+	}
+	for (let entity of entities) {
+		ctx.beginPath();
+		ctx.arc((entity.x - player.x) * ts + canvas.width / 2, (entity.y - player.y) * ts + canvas.height / 2, ts * player.r, 0, 2 * Math.PI);
+		ctx.fillStyle = "#ff0";
+		ctx.fill();
 		ctx.closePath();
 	}
 	ctx.beginPath();
@@ -147,13 +176,27 @@ function qcGetTiles(r) {
 	intToArr(qcArr, player.y + player.vy * 8);
 	qcArr.push(r);
 }
+function qcSetloc() {
+	qcArr.push(1);
+	intToArr(qcArr, player.x);
+	intToArr(qcArr, player.y);
+	qcArr.push((player.x * 256) & 255);
+	qcArr.push((player.y * 256) & 255);
+}
+function qcBreak(x, y) {
+	qcArr.push(2);
+	intToArr(qcArr, x);
+	intToArr(qcArr, y);
+}
+function qcGetEntities() {
+	qcArr.push(3);
+}
 function qcSend() {
 	if (qcArr.length == 0) return;
 	let ab = new ArrayBuffer(qcArr.length);
 	let ua = new Uint8Array(ab);
 	for (let i = 0; i < qcArr.length; ++i)
 		ua[i] = qcArr[i];
-//	console.log(ua);
 	ws.send(ab);
 	qcArr = [];
 }
@@ -165,7 +208,6 @@ function hcSetTiles(ua, i) {
 	i += 4;
 	let r = ua[i];
 	++i;
-//	console.log(x, y);
 	for (let wy = y - r; wy <= y + r; ++wy) {
 	for (let wx = x - r; wx <= x + r; ++wx) {
 		setTile(wx, wy, ua[i]);
@@ -173,21 +215,39 @@ function hcSetTiles(ua, i) {
 	}}
 	return i;
 }
+function hcSetEntities(ua, i) {
+	let npl = ua[i]; ++i;
+	entities = [];
+//	console.log(ua);
+	for (let j = 0; j < npl; ++j) {
+		let x = uaToInt(ua, i); i += 4;
+		let y = uaToInt(ua, i); i += 4;
+		let subx = ua[i]; i++;
+		let suby = ua[i]; i++;
+		entities.push({x: x + subx / 256, y: y + suby / 256});
+	}
+	return i;
+}
 
 ws.onmessage = function(e) {
 //	console.log(e);
 	let ua = new Uint8Array(e.data);
 	let i = 0;
-	while (i != ua.length) {
+	let codes = [];
+	while (i < ua.length) {
 		let code = ua[i];
+		codes.push(code);
 		++i;
 		switch (code) {
 		case 0:
 			i = hcSetTiles(ua, i);
 			break;
+		case 1:
+			i = hcSetEntities(ua, i);
+			break;
 		}
 	}
-//	console.log(ua);
+//	console.log(codes);
 }
 
 ws.onopen = function() {
@@ -206,11 +266,11 @@ ws.onopen = function() {
 
 function handleKey(k, b) {
 	switch (k) {
-	case "a": controls.dir[3] = b; break;
-	case "s": controls.dir[2] = b; break;
-	case "d": controls.dir[1] = b; break;
+	case "a": controls.dirw = b; break;
+	case "s": controls.dirs = b; break;
+	case "d": controls.dire = b; break;
 	case "w":
-	case "f": controls.dir[0] = b; break;
+	case "f": controls.dirn = b; break;
 	case "j": controls.a = b; break;
 	case "k": controls.b = b; break;
 	}

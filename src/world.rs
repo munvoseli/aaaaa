@@ -1,17 +1,20 @@
 
 use crate::chunk::Chunk;
 use crate::player::Player;
+use crate::orb::Orb;
 
 pub struct World {
 	pub chunks: Vec<Chunk>,
-	pub players: Vec<Player>
+	pub players: Vec<Player>,
+	pub orbs: Vec<Orb>
 }
 
 impl World {
 	pub fn new() -> Self {
 		Self {
 			chunks: Vec::new(),
-			players: Vec::new()
+			players: Vec::new(),
+			orbs: Vec::new()
 		}
 	}
 	pub fn unload_unused_chunks(&mut self) {

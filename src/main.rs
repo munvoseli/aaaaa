@@ -23,8 +23,11 @@
 mod world;
 mod chunk;
 mod player;
+mod orb;
 use crate::world::World;
 use crate::player::Player;
+use crate::orb::Orb;
+use crate::player::Entpos;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -46,21 +49,28 @@ async fn main() {
 fn tick_loop(world: Amworld) {
 	tokio::spawn(async move {
 		println!("tick handle");
+		let mut i: u32 = 0;
 		loop {
-			println!("  begin tick loop");
 			let a = Arc::clone(&world);
 			let mut tw = a.lock().unwrap();
-			println!("  got lock");
-			tick_step(&mut tw);
+			tick_step(&mut tw, i);
 			drop(tw);
-			std::thread::sleep(std::time::Duration::from_millis(5000));
-			println!("  end tick loop");
+			std::thread::sleep(std::time::Duration::from_millis(50));
+			i += 1;
+			if i >= 100 {
+				i = 0;
+			}
 		}
 	});
 }
 
-fn tick_step(world: &mut World) {
-	world.unload_unused_chunks();
+fn tick_step(world: &mut World, ticki: u32) {
+	if ticki == 0 {
+		world.unload_unused_chunks();
+	}
+	for orb in &mut world.orbs {
+		orb.pos.addsub(0, 0);
+	}
 }
 
 fn net_loop(world: Amworld) {
@@ -84,7 +94,7 @@ fn net_loop(world: Amworld) {
 				stream.unwrap(), callback
 				).unwrap();
 			let pid = world.players.len();
-			world.players.push(Player {x: 0, y: 0, subx: 128, suby: 128});
+			world.players.push(Player {pos: Entpos {x: 0, y: 0, subx: 128, suby: 128}});
 			drop(world);
 			loop {
 				let msg = wsock.read_message();
@@ -132,6 +142,8 @@ fn handle_message(v: &Vec<u8>, world: &mut World, pid: usize) -> Vec<u8> {
 		let mut rv = match code {
 		0 => hc_get_tiles(&mut i, v, world),
 		1 => hc_set_loc(&mut i, v, world, pid),
+		2 => hc_break(&mut i, v, world),
+		3 => hc_get_entities(world, pid),
 		_ => Vec::new()
 		};
 		sc.append(&mut rv);
@@ -185,13 +197,34 @@ fn hc_get_tiles(i: &mut usize, v: &Vec<u8>, world: &mut World) -> Vec<u8> {
 }
 
 fn hc_set_loc(i: &mut usize, v: &Vec<u8>, world: &mut World, pid: usize) -> Vec<u8> {
-	world.players[pid].x = read_as_int(*i, v);
+	world.players[pid].pos.x = read_as_int(*i, v);
 	*i += 4;
-	world.players[pid].y = read_as_int(*i, v);
+	world.players[pid].pos.y = read_as_int(*i, v);
 	*i += 4;
-	world.players[pid].subx = v[*i];
+	world.players[pid].pos.subx = v[*i];
 	*i += 1;
-	world.players[pid].suby = v[*i];
+	world.players[pid].pos.suby = v[*i];
 	*i += 1;
 	Vec::new()
+}
+
+fn hc_break(i: &mut usize, v: &Vec<u8>, world: &mut World) -> Vec<u8> {
+	let x = read_as_int(*i, v); *i += 4;
+	let y = read_as_int(*i, v); *i += 4;
+	world.set_tile(x, y, 0x80);
+	Vec::new()
+}
+
+fn hc_get_entities(world: &mut World, pid: usize) -> Vec<u8> {
+	let mut rv: Vec<u8> = Vec::new();
+	rv.push(1);
+	rv.push((world.players.len() - 1) as u8);
+	for i in 0..world.players.len() {
+		if i == pid { continue; }
+		append_int(&mut rv, world.players[i].pos.x);
+		append_int(&mut rv, world.players[i].pos.y);
+		rv.push(world.players[i].pos.subx);
+		rv.push(world.players[i].pos.suby);
+	}
+	rv
 }
