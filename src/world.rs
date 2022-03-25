@@ -16,10 +16,13 @@ impl World {
 	}
 	pub fn unload_unused_chunks(&mut self) {
 		let bfn = self.chunks.len();
-		self.chunks = Vec::new();
 		for i in 0..self.chunks.len() {
-			
+			if self.chunks[i].modified {
+				println!("saving chunk");
+				self.chunks[i].save();
+			}
 		}
+		self.chunks = Vec::new();
 		println!("Amount of chunks was {} and is now {}", bfn, self.chunks.len());
 	}
 	fn get_chunk(&mut self, x: i32, y: i32) -> usize {

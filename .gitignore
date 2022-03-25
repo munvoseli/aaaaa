@@ -2,3 +2,4 @@
 /nginx.conf
 *.swp
 /Cargo.lock
+/data/*

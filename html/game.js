@@ -16,7 +16,8 @@ let player = {
 	y: 0,
 	vx: 0,
 	vy: 0,
-	drag: 1/32,
+	r: 1/3,
+	drag: 1/64,
 	control: 1
 }
 
@@ -77,7 +78,7 @@ function movePlayer() {
 		let opy = player.y;
 		player.x += player.vx / steps;
 		player.y += player.vy / steps;
-		let de = deWorld(player.x, player.y) - 1/3;
+		let de = deWorld(player.x, player.y) - player.r;
 		if (de < 0) {
 			let nm = nmWorld(player.x, player.y);
 			player.x -= nm[0] * de;
@@ -104,6 +105,7 @@ function step(sc) {
 
 function draw() { // i don't know what these stand for, even though i just made them
 	let ts = 8; // does what the acronym stand for matter
+	ts = 16 - (4 * Math.max(Math.abs(player.vx), Math.abs(player.vy)));
 	let xba = canvas.width / ts / 2; // what truly matters in life?
 	let yba = canvas.height / ts / 2; // not the acronym
 	// but ts is tile width/height in pixels
@@ -119,7 +121,7 @@ function draw() { // i don't know what these stand for, even though i just made 
 		ctx.closePath();
 	}
 	ctx.beginPath();
-	ctx.arc(canvas.width / 2, canvas.height / 2, ts / 3, 0, 2 * Math.PI);
+	ctx.arc(canvas.width / 2, canvas.height / 2, ts * player.r, 0, 2 * Math.PI);
 	ctx.fillStyle = "#f0f";
 	ctx.fill();
 	ctx.closePath();
@@ -189,12 +191,12 @@ ws.onmessage = function(e) {
 }
 
 ws.onopen = function() {
-	let ab = new ArrayBuffer(10);
-	let ua = new Uint8Array(ab);
-	let d = [0 , 0,0,0,5 , 0,0,0,0 , 10];
-	for (let i = 0; i < d.length; ++i)
-		ua[i] = d[i];
-	ws.send(ab);
+//	let ab = new ArrayBuffer(10);
+//	let ua = new Uint8Array(ab);
+//	let d = [0 , 0,0,0,5 , 0,0,0,0 , 10];
+//	for (let i = 0; i < d.length; ++i)
+//		ua[i] = d[i];
+//	ws.send(ab);
 	setInterval(function() {
 		step(sc);
 		draw();

@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io::{Write, Read};
-//use rand::distributions::{Distribution, Uniform};
+use rand::distributions::{Distribution, Uniform};
 pub struct Chunk {
 	pub x: i32,
 	pub y: i32,
@@ -10,8 +10,8 @@ pub struct Chunk {
 
 impl Chunk {
 	fn generate_new(cells: &mut [u8; 128*128]) {
-//		let mut rng = rand::thread_rng();
-//		let die = Uniform::from(0..5);
+		let mut rng = rand::thread_rng();
+		let die = Uniform::from(0..5);
 		let mut i = 0;
 		for y in 0..128 {
 		for x in 0..128 {
