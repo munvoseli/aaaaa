@@ -5,8 +5,13 @@ let ctx = canvas.getContext("2d");
 canvas.width = 600;
 canvas.height = 600;
 
+let spirk = document.createElement("canvas");
+let spctx = spirk.getContext("2d");
+
 let qcArr = [];
 let entities = [];
+let radPlayer = 1/2;
+let radOrb = 1/3;
 
 let ws = new WebSocket("ws://" + location.host + ":3012");
 ws.binaryType = "arraybuffer";
@@ -17,7 +22,6 @@ let player = {
 	y: 0,
 	vx: 0,
 	vy: 0,
-	r: 1/3,
 	drag: 1/64,
 	control: 1
 }
@@ -82,7 +86,7 @@ function movePlayer() {
 		let opy = player.y;
 		player.x += player.vx / steps;
 		player.y += player.vy / steps;
-		let de = deWorld(player.x, player.y) - player.r;
+		let de = deWorld(player.x, player.y) - radPlayer;
 		if (de < 0) {
 			let nm = nmWorld(player.x, player.y);
 			player.x -= nm[0] * de;
@@ -144,18 +148,17 @@ function draw() { // i don't know what these stand for, even though i just made 
 	}
 	for (let entity of entities) {
 		ctx.beginPath();
-		ctx.arc((entity.x - player.x) * ts + canvas.width / 2, (entity.y - player.y) * ts + canvas.height / 2, ts * player.r, 0, 2 * Math.PI);
+		ctx.arc((entity.x - player.x) * ts + canvas.width / 2, (entity.y - player.y) * ts + canvas.height / 2, ts * [radPlayer, radOrb][entity.t], 0, 2 * Math.PI);
 		ctx.fillStyle = "#ff0";
 		ctx.fill();
 		ctx.closePath();
 	}
 	ctx.beginPath();
-	ctx.arc(canvas.width / 2, canvas.height / 2, ts * player.r, 0, 2 * Math.PI);
+	ctx.arc(canvas.width / 2, canvas.height / 2, ts * radPlayer, 0, 2 * Math.PI);
 	ctx.fillStyle = "#f0f";
 	ctx.fill();
 	ctx.closePath();
 }
-draw();
 
 let sc = 0;
 
@@ -220,11 +223,12 @@ function hcSetEntities(ua, i) {
 	entities = [];
 //	console.log(ua);
 	for (let j = 0; j < npl; ++j) {
+		let t = ua[i]; i++;
 		let x = uaToInt(ua, i); i += 4;
 		let y = uaToInt(ua, i); i += 4;
 		let subx = ua[i]; i++;
 		let suby = ua[i]; i++;
-		entities.push({x: x + subx / 256, y: y + suby / 256});
+		entities.push({x: x + subx / 256, y: y + suby / 256, t: t});
 	}
 	return i;
 }
@@ -250,19 +254,43 @@ ws.onmessage = function(e) {
 //	console.log(codes);
 }
 
-ws.onopen = function() {
-//	let ab = new ArrayBuffer(10);
-//	let ua = new Uint8Array(ab);
-//	let d = [0 , 0,0,0,5 , 0,0,0,0 , 10];
-//	for (let i = 0; i < d.length; ++i)
-//		ua[i] = d[i];
-//	ws.send(ab);
+
+let tryStartCount = 2;
+function tryStart() {
+	tryStartCount--;
+	if (tryStartCount != 0) return;
 	setInterval(function() {
 		step(sc);
 		draw();
 		++sc;
 	}, 1000 / 32);
 }
+
+ws.onopen = function() {
+	tryStart();
+//	let ab = new ArrayBuffer(10);
+//	let ua = new Uint8Array(ab);
+//	let d = [0 , 0,0,0,5 , 0,0,0,0 , 10];
+//	for (let i = 0; i < d.length; ++i)
+//		ua[i] = d[i];
+//	ws.send(ab);
+};
+
+ws.onerror = function() {
+	ctx.textAlign = "center";
+	ctx.textBaseline = "middle";
+	ctx.font = "20px monospace";
+	ctx.fillText("could not connect to ws", canvas.width / 2, canvas.height / 2);
+};
+
+let spritesheetimage = new Image();
+spritesheetimage.onload = function() {
+	spirk.width = spritesheetimage.naturalWidth;
+	spirk.height = spritesheetimage.naturalHeight;
+	spctx.drawImage(spritesheetimage, 0, 0);
+	tryStart();
+};
+spritesheetimage.src = "sprites.png";
 
 function handleKey(k, b) {
 	switch (k) {

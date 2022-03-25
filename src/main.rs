@@ -28,6 +28,7 @@ use crate::world::World;
 use crate::player::Player;
 use crate::orb::Orb;
 use crate::player::Entpos;
+use crate::orb::Vel;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -67,9 +68,24 @@ fn tick_loop(world: Amworld) {
 fn tick_step(world: &mut World, ticki: u32) {
 	if ticki == 0 {
 		world.unload_unused_chunks();
+		world.orbs.push(Orb {
+			flavor: 0,
+			pos: Entpos { x: 0, y: 0, subx: 128, suby: 240 },
+			v: Vel { x: 0, y: 32 },
+			age: 0
+		});
 	}
-	for orb in &mut world.orbs {
-		orb.pos.addsub(0, 0);
+	let mut i = 0;
+	loop {
+		if i >= world.orbs.len() { break; }
+		let mut orb = &mut world.orbs[i];
+		if orb.age >= 200 {
+			world.orbs.remove(i);
+			continue;
+		}
+		orb.pos.addsub(orb.v.x, orb.v.y);
+		orb.age += 1;
+		i += 1;
 	}
 }
 
@@ -218,13 +234,21 @@ fn hc_break(i: &mut usize, v: &Vec<u8>, world: &mut World) -> Vec<u8> {
 fn hc_get_entities(world: &mut World, pid: usize) -> Vec<u8> {
 	let mut rv: Vec<u8> = Vec::new();
 	rv.push(1);
-	rv.push((world.players.len() - 1) as u8);
+	rv.push((world.players.len() - 1 + world.orbs.len()) as u8);
 	for i in 0..world.players.len() {
 		if i == pid { continue; }
+		rv.push(0);
 		append_int(&mut rv, world.players[i].pos.x);
 		append_int(&mut rv, world.players[i].pos.y);
 		rv.push(world.players[i].pos.subx);
 		rv.push(world.players[i].pos.suby);
+	}
+	for orb in &world.orbs {
+		rv.push(1);
+		append_int(&mut rv, orb.pos.x);
+		append_int(&mut rv, orb.pos.y);
+		rv.push(orb.pos.subx);
+		rv.push(orb.pos.suby);
 	}
 	rv
 }
