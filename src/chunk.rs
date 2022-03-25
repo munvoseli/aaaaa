@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io::{Write, Read};
-
+use rand::distributions::{Distribution, Uniform};
 pub struct Chunk {
 	pub x: i32,
 	pub y: i32,
@@ -9,6 +9,13 @@ pub struct Chunk {
 }
 
 impl Chunk {
+	fn generate_new(cells: &mut [u8; 128*128]) {
+		let mut rng = rand::thread_rng();
+		let die = Uniform::from(0x80..0x82);
+		for i in 0..128*128 {
+			cells[i] = die.sample(&mut rng);
+		}
+	}
 	pub fn load(x: i32, y: i32) -> Self {
 		let f = File::open(format!("data/{}_{}.dat", x, y));
 		let mut tiles: [u8; 128*128] = [0; 128*128];
@@ -21,7 +28,7 @@ impl Chunk {
 				tiles[i] = buf[i + 9];
 			}
 		} else {
-		//	tiles = [0; 128 * 128];
+			Self::generate_new(&mut tiles);
 		}
 		Self {
 			x: x, y: y,

@@ -48,7 +48,7 @@ async fn main() {
 }
 
 fn tick_step() {
-	println!("  []");
+//	println!("  []");
 }
 
 fn net_loop(world: Amworld) {
@@ -62,7 +62,7 @@ fn net_loop(world: Amworld) {
 			let tile = world.get_tile(0, 0) + 1;
 			world.set_tile(0, 0, tile);
 			println!("spawned process for tcp server");
-			println!("world tile 0 0 {}", world.get_tile(0, 0));
+//			println!("world tile 0 0 {}", world.get_tile(0, 0));
 			let callback = |_req: &tungstenite::handshake::server::Request,
 			response: tungstenite::handshake::server::Response| {
 				println!("new ws handshake");
@@ -121,19 +121,26 @@ fn handle_message(v: &Vec<u8>, world: &mut World, pid: usize) -> Vec<u8> {
 }
 
 fn read_as_int(i: usize, v: &Vec<u8>) -> i32 {
-	((v[i] as i32) << 24) | ((v[i + 1] as i32) << 16) | ((v[i + 2] as i32) << 8) | (v[i] as i32)
+//	(((v[i] as i32) >> 6) - 1) * (((v[i] & 127) as i32) << 24) | ((v[i + 1] as i32) << 16) | ((v[i + 2] as i32) << 8) | (v[i + 3] as i32)
+	i32::from_be_bytes([v[i], v[i+1], v[i+2], v[i+3]])
 }
 //fn int_into_vec(x: i32) -> Vec<u8> {
 //	vec!(((x >> 24) & 8) as u8, ((x >> 16) & 8) as u8, ((x >> 8) & 8) as u8, (x & 8) as u8)
 //}
 fn append_int(v: &mut Vec<u8>, x: i32) {
-	v.push(((x >> 24)      ) as u8);
-	v.push(((x >> 16) & 255) as u8);
-	v.push(((x >>  8) & 255) as u8);
-	v.push( (x        & 255) as u8);
+	let bytes = x.to_be_bytes();
+	v.push(bytes[0]);
+	v.push(bytes[1]);
+	v.push(bytes[2]);
+	v.push(bytes[3]);
+//	v.push(((x >> 24)      ) as u8);
+//	v.push(((x >> 16) & 255) as u8);
+//	v.push(((x >>  8) & 255) as u8);
+//	v.push( (x        & 255) as u8);
 }
 
 fn hc_get_tiles(i: &mut usize, v: &Vec<u8>, world: &mut World) -> Vec<u8> {
+//	println!("{} {} {} {}", (v[*i] as i32) << 24, (v[*i + 1] as i32) << 16, (v[*i + 2] as i32) << 8, (v[*i + 3] as i32));
 	let x: i32 = read_as_int(*i, v);
 	*i += 4;
 	let y: i32 = read_as_int(*i, v);
@@ -143,6 +150,7 @@ fn hc_get_tiles(i: &mut usize, v: &Vec<u8>, world: &mut World) -> Vec<u8> {
 	*i += 1;
 	let mut rv: Vec<u8> = Vec::new();
 	rv.push(0);
+	println!("{} {} {}", x, y, r);
 	append_int(&mut rv, x);
 	append_int(&mut rv, y);
 	rv.push((r & 255) as u8);
