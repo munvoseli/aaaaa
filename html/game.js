@@ -13,8 +13,18 @@ ws.binaryType = "arraybuffer";
 let worldData = new Uint8Array(128*128);
 let player = {
 	x: 0, // float
-	y: 0
+	y: 0,
+	vx: 0,
+	vy: 0,
+	drag: 1/32,
+	control: 1
 }
+
+let controls = {
+	dir: [0,0,0,0],
+	a: 0,
+	b: 0
+};
 
 function getTile(x, y) {
 	return worldData[(x & 127) | ((y & 127) << 7)];
@@ -30,14 +40,64 @@ function clearWrow(row) {
 	for (let i = 0; i < 128; ++i)
 		worldData[row * 128 + i] = 0;
 }
+function velChange(x, amount, cap) {
+	return x < -cap ? -cap : x < -amount ? x + amount : x > cap ? cap : x > amount ? x - amount : 0;
+}
+
+function deWorld(x, y) {
+	let r = 5;
+	let mind = r;
+	for (let dy = Math.floor(y - r); dy <= y + r; ++dy)
+	for (let dx = Math.floor(x - r); dx <= x + r; ++dx) {
+		let tile = getTile(dx, dy);
+		if (tile != 0x80) {
+			let hx = Math.abs(dx + .5 - x) - .5;
+			let hy = Math.abs(dy + .5 - y) - .5;
+			let m = Math.max(hx, hy);
+			if (m < mind) mind = m;
+		}
+	}
+	return mind;
+}
+function nmWorld(x, y) {
+	let d = 1/16;
+	let dex = deWorld(x + d, y) - deWorld(x - d, y);
+	let dey = deWorld(x, y + d) - deWorld(x, y - d);
+	let mag = Math.sqrt(dex * dex + dey * dey);
+	if (mag == 0) return [0, 0];
+	return [dex / mag, dey / mag];
+}
+
+function movePlayer() {
+	let steps = (Math.abs(player.vx) + Math.abs(player.vy)) * 4;
+	if (steps < 1) steps = 1;
+	if (steps > 30) steps = 16;
+	for (let i = 0; i < steps; ++i) {
+		let opx = player.x;
+		let opy = player.y;
+		player.x += player.vx / steps;
+		player.y += player.vy / steps;
+		let de = deWorld(player.x, player.y) - 1/3;
+		if (de < 0) {
+			let nm = nmWorld(player.x, player.y);
+			player.x -= nm[0] * de;
+			player.y -= nm[1] * de;
+			player.vx = (player.x - opx) * steps;
+			player.vy = (player.y - opy) * steps;
+		}
+	}
+}
 
 function step(sc) {
-	player.x += .1;
-	player.y += .2;
+	player.vx = velChange(player.vx, player.drag, 2);
+	player.vy = velChange(player.vy, player.drag, 2);
+	player.vx += (controls.dir[1] - controls.dir[3]) / 8;
+	player.vy += (controls.dir[2] - controls.dir[0]) / 8;
+	movePlayer();
 	clearWcol((player.x & 127) ^ 64);
 	clearWrow((player.y & 127) ^ 64);
-	if (sc % 32 == 0) {
-		qcGetTiles(10);
+	if (sc % 4 == 0) {
+		qcGetTiles(10 + Math.floor(10 * Math.max(Math.abs(player.vx), Math.abs(player.vy))));
 		qcSend();
 	}
 }
@@ -72,6 +132,7 @@ function uaToInt(ua, i) {
 	return (ua[i] >> 7 << 31) | ((ua[i] & 127) << 24) | (ua[i+1] << 16) | (ua[i+2] << 8) | ua[i+3];
 }
 function intToArr(arr, x) {
+	x = Math.floor(x);
 	arr.push(((x < 0) << 7) | ((x >> 23) & 127));
 	arr.push((x >> 16) & 255);
 	arr.push((x >> 8) & 255);
@@ -80,8 +141,8 @@ function intToArr(arr, x) {
 
 function qcGetTiles(r) {
 	qcArr.push(0);
-	intToArr(qcArr, player.x);
-	intToArr(qcArr, player.y);
+	intToArr(qcArr, player.x + player.vx * 8);
+	intToArr(qcArr, player.y + player.vy * 8);
 	qcArr.push(r);
 }
 function qcSend() {
@@ -90,7 +151,7 @@ function qcSend() {
 	let ua = new Uint8Array(ab);
 	for (let i = 0; i < qcArr.length; ++i)
 		ua[i] = qcArr[i];
-	console.log(ua);
+//	console.log(ua);
 	ws.send(ab);
 	qcArr = [];
 }
@@ -102,7 +163,7 @@ function hcSetTiles(ua, i) {
 	i += 4;
 	let r = ua[i];
 	++i;
-	console.log(x, y);
+//	console.log(x, y);
 	for (let wy = y - r; wy <= y + r; ++wy) {
 	for (let wx = x - r; wx <= x + r; ++wx) {
 		setTile(wx, wy, ua[i]);
@@ -112,7 +173,7 @@ function hcSetTiles(ua, i) {
 }
 
 ws.onmessage = function(e) {
-	console.log(e);
+//	console.log(e);
 	let ua = new Uint8Array(e.data);
 	let i = 0;
 	while (i != ua.length) {
@@ -124,7 +185,7 @@ ws.onmessage = function(e) {
 			break;
 		}
 	}
-	console.log(ua);
+//	console.log(ua);
 }
 
 ws.onopen = function() {
@@ -140,3 +201,22 @@ ws.onopen = function() {
 		++sc;
 	}, 1000 / 32);
 }
+
+function handleKey(k, b) {
+	switch (k) {
+	case "a": controls.dir[3] = b; break;
+	case "s": controls.dir[2] = b; break;
+	case "d": controls.dir[1] = b; break;
+	case "w":
+	case "f": controls.dir[0] = b; break;
+	case "j": controls.a = b; break;
+	case "k": controls.b = b; break;
+	}
+}
+addEventListener("keyup", function(e) {
+	handleKey(e.key, 0);
+}, false);
+addEventListener("keydown", function(e) {
+	if (e.repeat) return false;
+	handleKey(e.key, 1);
+}, false);

@@ -3,7 +3,7 @@ use crate::chunk::Chunk;
 use crate::player::Player;
 
 pub struct World {
-	chunks: Vec<Chunk>,
+	pub chunks: Vec<Chunk>,
 	pub players: Vec<Player>
 }
 
@@ -14,7 +14,17 @@ impl World {
 			players: Vec::new()
 		}
 	}
+	pub fn unload_unused_chunks(&mut self) {
+		let bfn = self.chunks.len();
+		self.chunks = Vec::new();
+		for i in 0..self.chunks.len() {
+			
+		}
+		println!("Amount of chunks was {} and is now {}", bfn, self.chunks.len());
+	}
 	fn get_chunk(&mut self, x: i32, y: i32) -> usize {
+		assert!(x % 128 == 0);
+		assert!(y % 128 == 0);
 		for i in 0..self.chunks.len() {
 			if self.chunks[i].x == x && self.chunks[i].y == y {
 				return i;
@@ -26,14 +36,14 @@ impl World {
 	pub fn set_tile(&mut self, x: i32, y: i32, tile: u8) {
 		let incx = x & 127;
 		let incy = y & 127;
-		let cid = self.get_chunk(x ^ incy, y ^ incy);
+		let cid = self.get_chunk(x ^ incx, y ^ incy);
 		self.chunks[cid].modified = true;
 		self.chunks[cid].tiles[(incx + incy * 128) as usize] = tile;
 	}
 	pub fn get_tile(&mut self, x: i32, y: i32) -> u8 {
 		let incx = x & 127;
 		let incy = y & 127;
-		let cid = self.get_chunk(x ^ incy, y ^ incy);
+		let cid = self.get_chunk(x ^ incx, y ^ incy);
 		self.chunks[cid].tiles[(incx + incy * 128) as usize]
 	}
 }

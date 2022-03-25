@@ -30,38 +30,50 @@ use std::sync::Mutex;
 
 type Amworld = std::sync::Arc<std::sync::Mutex<World>>;
 
+
 #[tokio::main]
 async fn main() {
 	let world: Amworld = Arc::new(Mutex::new(World::new()));
+	tick_loop(Arc::clone(&world));
 	{
-		let mut w = world.lock().unwrap();
+		let tw = Arc::clone(&world);
+		let mut w = tw.lock().unwrap();
 		(*w).set_tile(0, 0, 5);
 	}
-	tokio::spawn(async {
-		println!("tick handle");
-		loop {
-			tick_step();
-			std::thread::sleep(std::time::Duration::from_millis(5000));
-		}
-	});
-	net_loop(world);
+	net_loop(Arc::clone(&world));
 }
 
-fn tick_step() {
-//	println!("  []");
+fn tick_loop(world: Amworld) {
+	tokio::spawn(async move {
+		println!("tick handle");
+		loop {
+			println!("  begin tick loop");
+			let a = Arc::clone(&world);
+			let mut tw = a.lock().unwrap();
+			println!("  got lock");
+			tick_step(&mut tw);
+			drop(tw);
+			std::thread::sleep(std::time::Duration::from_millis(5000));
+			println!("  end tick loop");
+		}
+	});
+}
+
+fn tick_step(world: &mut World) {
+	world.unload_unused_chunks();
 }
 
 fn net_loop(world: Amworld) {
 	let tcp_server = std::net::TcpListener::bind("127.0.0.1:3012").unwrap();
 	println!("net_loop called");
 	for stream in tcp_server.incoming() {
-		let world = Arc::clone(&world);
+		let wrld = Arc::clone(&world);
 		println!("new stream from tcp server");
 		tokio::spawn(async move {
-			let mut world = world.lock().unwrap();
+			let mut world = wrld.lock().unwrap();
+			println!("spawned process for tcp server (mutex locked)");
 			let tile = world.get_tile(0, 0) + 1;
 			world.set_tile(0, 0, tile);
-			println!("spawned process for tcp server");
 //			println!("world tile 0 0 {}", world.get_tile(0, 0));
 			let callback = |_req: &tungstenite::handshake::server::Request,
 			response: tungstenite::handshake::server::Response| {
@@ -73,6 +85,7 @@ fn net_loop(world: Amworld) {
 				).unwrap();
 			let pid = world.players.len();
 			world.players.push(Player {x: 0, y: 0, subx: 128, suby: 128});
+			drop(world);
 			loop {
 				let msg = wsock.read_message();
 				match msg {
@@ -83,17 +96,26 @@ fn net_loop(world: Amworld) {
 					_ => ()
 				}
 				let msg = msg.unwrap();
-				println!("[]");
 				match msg {
 					tungstenite::Message::Text(h) => {
-						println!("{}", h);
+						println!("received text data: {}", h);
 					},
 					tungstenite::Message::Binary(v) => {
-						println!("received bin data of lenght {}", v.len());
+						let wrld = Arc::clone(&wrld);
+						let mut world = wrld.lock().unwrap();
+//						println!("received bin data of length {}", v.len());
+						let now = std::time::Instant::now();
 						let rv: Vec<u8> = handle_message(&v, &mut world, pid);
 						wsock.write_message(tungstenite::Message::Binary(rv)).unwrap();
+						let elapsed = now.elapsed().as_millis();
+						if elapsed > 100 {
+							println!("{} {}", elapsed, world.chunks.len());
+						}
+						drop(world);
 					},
-					_ => ()
+					_ => {
+						println!("received non-bin non-text data");
+					}
 				}
 			}
 		});
@@ -102,7 +124,7 @@ fn net_loop(world: Amworld) {
 }
 
 fn handle_message(v: &Vec<u8>, world: &mut World, pid: usize) -> Vec<u8> {
-	let mut i: usize = 0;
+	let mut i: usize = 0; // client might crash server without command size checks
 	let mut sc: Vec<u8> = Vec::new();
 	loop {
 		let code: u8 = v[i];
@@ -150,12 +172,12 @@ fn hc_get_tiles(i: &mut usize, v: &Vec<u8>, world: &mut World) -> Vec<u8> {
 	*i += 1;
 	let mut rv: Vec<u8> = Vec::new();
 	rv.push(0);
-	println!("{} {} {}", x, y, r);
+//	println!("{} {}", x, r);
 	append_int(&mut rv, x);
 	append_int(&mut rv, y);
 	rv.push((r & 255) as u8);
 	for wy in (y-r)..=(y+r) {
-	for wx in (x-r)..=(x+r) {
+	for wx in (x-r)..=(x+r) { // client can crash server with subtract overflow
 		rv.push(world.get_tile(wx, wy));
 	}
 	}
