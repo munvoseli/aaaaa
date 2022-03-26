@@ -141,15 +141,28 @@ function draw() { // i don't know what these stand for, even though i just made 
 		let tile = getTile(Math.floor(dx), Math.floor(dy));
 		let cx = (dx - player.x) * ts + canvas.width / 2;
 		let cy = (dy - player.y) * ts + canvas.height / 2;
-		ctx.beginPath();
-		ctx.fillStyle = tile == 0 ? "#000" : tile == 0x80 ? "#888480" : tile == 0x81 ? "#444" : "#ff0";
-		ctx.fillRect(Math.floor(cx), Math.floor(cy), Math.floor(cx + ts) - Math.floor(cx), Math.floor(cy + ts) - Math.floor(cy));
-		ctx.closePath();
+		if (tile < 0x82) {
+			ctx.beginPath();
+			ctx.fillStyle = tile == 0 ? "#000" : tile == 0x80 ? "#888480" : tile == 0x81 ? "#444" : "#ff0";
+			ctx.fillRect(Math.floor(cx), Math.floor(cy), Math.floor(cx + ts) - Math.floor(cx), Math.floor(cy + ts) - Math.floor(cy));
+			ctx.closePath();
+		} else {
+			ctx.drawImage(
+				spirk, (tile & 15) << 3, (tile >> 4) << 3, 8, 8,
+				Math.floor(cx), Math.floor(cy), Math.floor(cx + ts) - Math.floor(cx), Math.floor(cy + ts) - Math.floor(cy)
+			);
+		}
 	}
 	for (let entity of entities) {
 		ctx.beginPath();
+		if (entity.t == 0)
+			ctx.fillStyle = "#ff0";
+		else if (entity.t == 1) {
+			ctx.fillStyle = ["#fff", "#5d97ff", "#facb35"][entity.f];
+		} else {
+			ctx.fillStyle = "#666";
+		}
 		ctx.arc((entity.x - player.x) * ts + canvas.width / 2, (entity.y - player.y) * ts + canvas.height / 2, ts * [radPlayer, radOrb][entity.t], 0, 2 * Math.PI);
-		ctx.fillStyle = "#ff0";
 		ctx.fill();
 		ctx.closePath();
 	}
@@ -194,6 +207,12 @@ function qcBreak(x, y) {
 function qcGetEntities() {
 	qcArr.push(3);
 }
+function qcPlaceTile(x, y, t) {
+	qcArr.push(4);
+	intToArr(qcArr, x);
+	intToArr(qcArr, y);
+	qcArr.push(t);
+}
 function qcSend() {
 	if (qcArr.length == 0) return;
 	let ab = new ArrayBuffer(qcArr.length);
@@ -228,7 +247,11 @@ function hcSetEntities(ua, i) {
 		let y = uaToInt(ua, i); i += 4;
 		let subx = ua[i]; i++;
 		let suby = ua[i]; i++;
-		entities.push({x: x + subx / 256, y: y + suby / 256, t: t});
+		let e = {x: x + subx / 256, y: y + suby / 256, t: t};
+		if (t == 1) {
+			e.f = ua[i]; i++;
+		}
+		entities.push(e);
 	}
 	return i;
 }
@@ -268,6 +291,7 @@ function tryStart() {
 
 ws.onopen = function() {
 	tryStart();
+	ctx.imageSmoothingEnabled = false;
 //	let ab = new ArrayBuffer(10);
 //	let ua = new Uint8Array(ab);
 //	let d = [0 , 0,0,0,5 , 0,0,0,0 , 10];

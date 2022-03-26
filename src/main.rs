@@ -75,18 +75,7 @@ fn tick_step(world: &mut World, ticki: u32) {
 			age: 0
 		});
 	}
-	let mut i = 0;
-	loop {
-		if i >= world.orbs.len() { break; }
-		let mut orb = &mut world.orbs[i];
-		if orb.age >= 200 {
-			world.orbs.remove(i);
-			continue;
-		}
-		orb.pos.addsub(orb.v.x, orb.v.y);
-		orb.age += 1;
-		i += 1;
-	}
+	Orb::step(world);
 }
 
 fn net_loop(world: Amworld) {
@@ -160,6 +149,7 @@ fn handle_message(v: &Vec<u8>, world: &mut World, pid: usize) -> Vec<u8> {
 		1 => hc_set_loc(&mut i, v, world, pid),
 		2 => hc_break(&mut i, v, world),
 		3 => hc_get_entities(world, pid),
+		4 => hc_place_tile(&mut i, v, world),
 		_ => Vec::new()
 		};
 		sc.append(&mut rv);
@@ -249,6 +239,15 @@ fn hc_get_entities(world: &mut World, pid: usize) -> Vec<u8> {
 		append_int(&mut rv, orb.pos.y);
 		rv.push(orb.pos.subx);
 		rv.push(orb.pos.suby);
+		rv.push(orb.flavor);
 	}
 	rv
+}
+
+fn hc_place_tile(i: &mut usize, v: &Vec<u8>, world: &mut World) -> Vec<u8> {
+	let x = read_as_int(*i, v); *i += 4;
+	let y = read_as_int(*i, v); *i += 4;
+	let t = v[*i]; *i += 1;
+	world.set_tile(x, y, t);
+	Vec::new()
 }
