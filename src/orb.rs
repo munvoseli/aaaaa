@@ -13,7 +13,30 @@ pub struct Orb {
 	pub age: u32
 }
 
+pub fn dir_to_xyint(dir: u8) -> (i32, i32) {
+	(
+		[0, 1, 0, -1][dir as usize],
+		[-1, 0, 1, 0][dir as usize]
+	)
+}
 impl Orb {
+	pub fn new(x: i32, y: i32, dir: u8, fl: u8) -> Self {
+		let v = dir_to_xyint(dir);
+		Self {
+			flavor: fl,
+			pos: Entpos {
+				x: x,
+				y: y,
+				subx: (128 + v.0 * 112) as u8,
+				suby: (128 + v.1 * 112) as u8
+			},
+			v: Vel {
+				x: v.0 * 32,
+				y: v.1 * 32
+			},
+			age: 0
+		}
+	}
 	pub fn step(world: &mut World) {
 		let mut i = 0;
 		loop {

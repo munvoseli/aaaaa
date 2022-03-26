@@ -203,6 +203,8 @@ fn hc_get_tiles(i: &mut usize, v: &Vec<u8>, world: &mut World) -> Vec<u8> {
 }
 
 fn hc_set_loc(i: &mut usize, v: &Vec<u8>, world: &mut World, pid: usize) -> Vec<u8> {
+	let ox = world.players[pid].pos.x;
+	let oy = world.players[pid].pos.y;
 	world.players[pid].pos.x = read_as_int(*i, v);
 	*i += 4;
 	world.players[pid].pos.y = read_as_int(*i, v);
@@ -211,6 +213,7 @@ fn hc_set_loc(i: &mut usize, v: &Vec<u8>, world: &mut World, pid: usize) -> Vec<
 	*i += 1;
 	world.players[pid].pos.suby = v[*i];
 	*i += 1;
+	Player::do_move_checks(ox, oy, world, pid);
 	Vec::new()
 }
 

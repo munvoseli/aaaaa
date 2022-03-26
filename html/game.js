@@ -162,7 +162,7 @@ function draw() { // i don't know what these stand for, even though i just made 
 		} else {
 			ctx.fillStyle = "#666";
 		}
-		ctx.arc((entity.x - player.x) * ts + canvas.width / 2, (entity.y - player.y) * ts + canvas.height / 2, ts * [radPlayer, radOrb][entity.t], 0, 2 * Math.PI);
+		ctx.arc(Math.floor((entity.x - player.x) * ts + canvas.width / 2), Math.floor((entity.y - player.y) * ts + canvas.height / 2), ts * [radPlayer, radOrb][entity.t], 0, 2 * Math.PI);
 		ctx.fill();
 		ctx.closePath();
 	}
