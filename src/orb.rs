@@ -19,6 +19,27 @@ pub fn dir_to_xyint(dir: u8) -> (i32, i32) {
 		[-1, 0, 1, 0][dir as usize]
 	)
 }
+
+pub fn cast_from_runes(world: &mut World, flavor: u8, x: i32, y: i32) {
+	for r in [(0,0),(0,-1),(1,0),(0,1),(-1,0)] {
+		let t = world.get_tile(x + r.0, y + r.1);
+		if (t | 3) != 0x8f { continue; }
+		let card = t ^ 0x8c;
+		let i = card * 3 + flavor;
+		match i {
+		0 => { // gravity
+			for player in &mut world.players {
+				if (player.pos.x - x).abs() > 3 || (player.pos.y - y).abs() > 3 { continue; }
+//				player.comque.push();
+			}
+		},
+		_ => {
+			println!("unknown spell");
+		}
+		}
+	}
+}
+
 impl Orb {
 	pub fn new(x: i32, y: i32, dir: u8, fl: u8) -> Self {
 		let v = dir_to_xyint(dir);
@@ -52,8 +73,8 @@ impl Orb {
 			let y = orb.pos.y;
 			drop(orb);
 			let t = world.get_tile(x, y);
-			let mut orb = &mut world.orbs[i];
 			if t >= 0x90 && t < 0x98 {
+				let mut orb = &mut world.orbs[i];
 				let tf = ((t >> 2) & 1) + 1;
 				if orb.flavor == 0 || tf == orb.flavor {
 					let s = (t as i32 & 2) - 1;
@@ -68,6 +89,14 @@ impl Orb {
 						orb.age = 0;
 					}
 				}
+			} else if (t | 1) == 0x83 {
+				let nt =
+				if world.orbs[i].flavor == 1 { 0x82 }
+				else { 0x83 };
+				world.set_tile(x, y, nt);
+			} else if (t | 3) == 0x8f {
+				let flava = world.orbs[i].flavor;
+				cast_from_runes(world, flava, x, y);
 			}
 			i += 1;
 		}

@@ -28,7 +28,8 @@ impl Entpos {
 }
 
 pub struct Player {
-	pub pos: Entpos
+	pub pos: Entpos,
+	pub comque: Vec<u8>
 }
 
 impl Player {

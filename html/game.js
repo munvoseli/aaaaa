@@ -23,7 +23,9 @@ let player = {
 	vx: 0,
 	vy: 0,
 	drag: 1/64,
-	control: 1
+	control: 1,
+	accel: .5, // 1 for fast,
+	maxv: .5 // 2 for fast
 }
 
 let controls = {
@@ -59,7 +61,7 @@ function deWorld(x, y) {
 	for (let dy = Math.floor(y - r); dy <= y + r; ++dy)
 	for (let dx = Math.floor(x - r); dx <= x + r; ++dx) {
 		let tile = getTile(dx, dy);
-		if (tile != 0x80) {
+		if (tile != 0x80 && tile != 0x82) {
 			let hx = Math.abs(dx + .5 - x) - .5;
 			let hy = Math.abs(dy + .5 - y) - .5;
 			let m = Math.max(hx, hy);
@@ -100,7 +102,7 @@ function movePlayer() {
 function step(sc) {
 	if (player.vx != 0 || player.vy != 0) {
 		let vmag = Math.sqrt(player.vx ** 2 + player.vy ** 2);
-		let change = velChange(vmag, player.drag, 2) / vmag;
+		let change = velChange(vmag, player.drag, player.maxv) / vmag;
 		player.vx *= change;
 		player.vy *= change;
 	}
@@ -109,18 +111,26 @@ function step(sc) {
 	let cdx = (controls.dire & 1) - (controls.dirw & 1);
 	let cdy = (controls.dirs & 1) - (controls.dirn & 1);
 	let bofum = [1, 1.4][+(cdx != 0 && cdy != 0)];
-	player.vx += cdx / 8 / bofum;
-	player.vy += cdy / 8 / bofum;
+	player.vx += cdx / 8 / bofum * player.accel;
+	player.vy += cdy / 8 / bofum * player.accel;
 	movePlayer();
 	clearWcol((player.x & 127) ^ 64);
 	clearWrow((player.y & 127) ^ 64);
 	if (controls.b == 1) {
-		qcBreak(player.x + cdx, player.y + cdy);
+		let x = Math.floor(player.x + cdx);
+		let y = Math.floor(player.y + cdy);
+		let t = getTile(x, y);
+		let d = controls.dire & 1 ? 1 : controls.dirw & 1 ? 3 : controls.dirs & 1 ? 2 : 0;
+		if (t == 0x80) {
+			qcPlaceTile(x, y, 0x90 | d);
+		} else {
+			qcBreak(x, y);
+		}
 	}
 	if (sc % 4 == 0) {
 		qcSetloc();
 		qcGetEntities();
-		qcGetTiles(10 + Math.floor(10 * Math.max(Math.abs(player.vx), Math.abs(player.vy))));
+		qcGetTiles(25 + Math.floor(2 * Math.max(Math.abs(player.vx), Math.abs(player.vy))));
 	}
 	qcSend();
 	for (let key in controls) {
