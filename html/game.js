@@ -17,6 +17,9 @@ let ws = new WebSocket("ws://" + location.host + ":3012");
 ws.binaryType = "arraybuffer";
 
 let worldData = new Uint8Array(128*128);
+
+let items = new Uint8Array([0x81,0 , 0x82,0 , 0x88,1 , 0x90,1 , 0x94,1]);
+
 let player = {
 	x: 0, // float
 	y: 0,
@@ -25,7 +28,16 @@ let player = {
 	drag: 1/64,
 	control: 1,
 	accel: .5, // 1 for fast,
-	maxv: .5 // 2 for fast
+	maxv: .5, // 2 for fast
+	itemsel: 0,
+	lastdir: 0,
+	itemCounts: []
+}
+
+function getFocusedCoords(d) {
+	let x = Math.floor(player.x + [0,1,0,-1][d] * 1.45);
+	let y = Math.floor(player.y + [-1,0,1,0][d] * 1.45);
+	return [x, y];
 }
 
 let controls = {
@@ -34,7 +46,8 @@ let controls = {
 	dirs: 0,
 	dirw: 0,
 	a: 0,
-	b: 0
+	b: 0,
+	place: 0
 };
 
 function getTile(x, y) {
@@ -99,6 +112,20 @@ function movePlayer() {
 	}
 }
 
+function breakOrPlaceBlock(d) {
+	let [x, y] = getFocusedCoords(d);
+	let t = getTile(x, y);
+	if (t == 0x80) {
+		let i = player.itemsel * 2;
+		if (items[i + 1])
+			qcPlaceTile(x, y, items[i] | d);
+		else
+			qcPlaceTile(x, y, items[i]);
+	} else {
+		qcBreak(x, y);
+	}
+}
+
 function step(sc) {
 	if (player.vx != 0 || player.vy != 0) {
 		let vmag = Math.sqrt(player.vx ** 2 + player.vy ** 2);
@@ -108,24 +135,17 @@ function step(sc) {
 	}
 //	player.vx = velChange(player.vx, player.drag, 2);
 //	player.vy = velChange(player.vy, player.drag, 2);
-	let cdx = (controls.dire & 1) - (controls.dirw & 1);
-	let cdy = (controls.dirs & 1) - (controls.dirn & 1);
-	let bofum = [1, 1.4][+(cdx != 0 && cdy != 0)];
-	player.vx += cdx / 8 / bofum * player.accel;
-	player.vy += cdy / 8 / bofum * player.accel;
+	if (!(controls.place & 1)) {
+		let cdx = (controls.dire & 1) - (controls.dirw & 1);
+		let cdy = (controls.dirs & 1) - (controls.dirn & 1);
+		let bofum = [1, 1.4][+(cdx != 0 && cdy != 0)];
+		player.vx += cdx / 8 / bofum * player.accel;
+		player.vy += cdy / 8 / bofum * player.accel;
+	}
 	movePlayer();
 	clearWcol((player.x & 127) ^ 64);
 	clearWrow((player.y & 127) ^ 64);
 	if (controls.b == 1) {
-		let x = Math.floor(player.x + cdx);
-		let y = Math.floor(player.y + cdy);
-		let t = getTile(x, y);
-		let d = controls.dire & 1 ? 1 : controls.dirw & 1 ? 3 : controls.dirs & 1 ? 2 : 0;
-		if (t == 0x80) {
-			qcPlaceTile(x, y, 0x90 | d);
-		} else {
-			qcBreak(x, y);
-		}
 	}
 	if (sc % 4 == 0) {
 		qcSetloc();
@@ -137,6 +157,29 @@ function step(sc) {
 		if (controls[key] < 254)
 			controls[key] += 2;
 	}
+}
+
+function drawInventory() {
+	let hs = 8;
+	let s = hs * 2;
+	for (let i = 0; i < items.length; i += 2) {
+		let t = items[i];
+		ctx.drawImage(
+			spirk, (t & 15) << 3, (t >> 4) << 3, 8, 8,
+			i * hs, 0, s, s
+		);
+	}
+	ctx.beginPath();
+	ctx.fillStyle = "#fff";
+	ctx.fillRect(0, s, items.length * hs, s / 2);
+	ctx.closePath();
+	ctx.beginPath();
+	ctx.fillStyle = "#000";
+	ctx.moveTo(hs * (1 + player.itemsel * 2), s);
+	ctx.lineTo(hs * (2 + player.itemsel * 2), s + hs);
+	ctx.lineTo(hs * (    player.itemsel * 2), s + hs);
+	ctx.fill();
+	ctx.closePath();
 }
 
 function draw() { // i don't know what these stand for, even though i just made them
@@ -163,6 +206,16 @@ function draw() { // i don't know what these stand for, even though i just made 
 			);
 		}
 	}
+	if (controls.place & 1) {
+		for (let i = 0; i < 4; ++i) {
+			let [dx, dy] = getFocusedCoords(i);
+			ctx.beginPath();
+			ctx.fillStyle = "rgba(255,255,255,0.25)";
+			let cx = (dx - player.x) * ts + canvas.width / 2;
+			let cy = (dy - player.y) * ts + canvas.height / 2;
+			ctx.fillRect(Math.floor(cx), Math.floor(cy), Math.floor(cx + ts) - Math.floor(cx), Math.floor(cy + ts) - Math.floor(cy));
+		}
+	}
 	for (let entity of entities) {
 		ctx.beginPath();
 		if (entity.t == 0)
@@ -181,6 +234,7 @@ function draw() { // i don't know what these stand for, even though i just made 
 	ctx.fillStyle = "#f0f";
 	ctx.fill();
 	ctx.closePath();
+	drawInventory();
 }
 
 let sc = 0;
@@ -328,19 +382,35 @@ spritesheetimage.src = "sprites.png";
 
 function handleKey(k, b) {
 	switch (k) {
-	case "a": controls.dirw = b; break;
-	case "s": controls.dirs = b; break;
-	case "d": controls.dire = b; break;
-	case "w":
-	case "f": controls.dirn = b; break;
-	case "j": controls.a = b; break;
-	case "k": controls.b = b; break;
+	case "KeyA": controls.dirw = b; break;
+	case "KeyS": controls.dirs = b; break;
+	case "KeyD": controls.dire = b; break;
+	case "KeyW":
+	case "KeyF": controls.dirn = b; break;
+	case "KeyJ": controls.a = b; break;
+	case "KeyK": controls.b = b; break;
+	case "KeyU": if (b) { if (player.itemsel > 0) --player.itemsel }; break;
+	case "KeyI": if (b) { if (player.itemsel < items.length / 2 - 1) ++player.itemsel }; break;
+	case "ShiftLeft":
+	case "ShiftRight": controls.place = b; break;
 	}
 }
 addEventListener("keyup", function(e) {
-	handleKey(e.key, 0);
+	handleKey(e.code, 0);
 }, false);
 addEventListener("keydown", function(e) {
 	if (e.repeat) return false;
-	handleKey(e.key, 1);
+	console.log(e);
+	console.log(e.code, controls.place & 1);
+	if ((e.code == "KeyA" || e.code == "KeyS" || e.code == "KeyD" || e.code == "KeyF" || e.code == "KeyW") && (controls.place & 1)) {
+		let d = 0;
+		switch (e.code) {
+		case "KeyA": d = 3; break;
+		case "KeyS": d = 2; break;
+		case "KeyD": d = 1;
+		}
+		console.log(d);
+		breakOrPlaceBlock(d);
+	}
+	handleKey(e.code, 1);
 }, false);

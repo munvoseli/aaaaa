@@ -28,6 +28,7 @@ use crate::world::World;
 use crate::player::Player;
 use crate::orb::Orb;
 use crate::player::Entpos;
+use crate::player::Inventory;
 use crate::orb::Vel;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -99,7 +100,7 @@ fn net_loop(world: Amworld) {
 				stream.unwrap(), callback
 				).unwrap();
 			let pid = world.players.len();
-			world.players.push(Player {pos: Entpos {x: 0, y: 0, subx: 128, suby: 128}});
+			world.players.push(Player {pos: Entpos {x: 0, y: 0, subx: 128, suby: 128}, comque: Vec::new(), inventory: Inventory::new()});
 			drop(world);
 			loop {
 				let msg = wsock.read_message();

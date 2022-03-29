@@ -27,9 +27,45 @@ impl Entpos {
 	}
 }
 
+pub struct Inventory {
+	items: Vec<(u32, u8)>
+}
+
+impl Inventory {
+	pub fn new() -> Inventory { Inventory { items: Vec::new() } }
+	pub fn put(&mut self, item: u8) {
+		for pair in &mut self.items {
+			if pair.1 == item {
+				pair.0 += 1;
+				return;
+			}
+		}
+		self.items.push((1, item));
+	}
+	pub fn rem(&mut self, item: u8) -> bool {
+		let mut i: usize = 0;
+		for pair in &mut self.items {
+			if pair.1 == item {
+				pair.0 -= 1;
+				break;
+			}
+			i += 1;
+		}
+		if i == self.items.len() {
+			return false;
+		} else {
+			if self.items[i].0 == 0 {
+				self.items.remove(i);
+			}
+			return true;
+		}
+	}
+}
+
 pub struct Player {
 	pub pos: Entpos,
-	pub comque: Vec<u8>
+	pub comque: Vec<u8>,
+	pub inventory: Inventory
 }
 
 impl Player {
