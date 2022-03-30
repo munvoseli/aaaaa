@@ -18,7 +18,7 @@ ws.binaryType = "arraybuffer";
 
 let worldData = new Uint8Array(128*128);
 
-let items = new Uint8Array([0x81,0 , 0x82,0 , 0x88,1 , 0x90,1 , 0x94,1]);
+let items = new Uint8Array([0x81,0 , 0x82,0 , 0x88,1 , 0x8c,0 , 0x90,1 , 0x94,1]);
 
 let player = {
 	x: 0, // float
@@ -31,6 +31,7 @@ let player = {
 	maxv: .5, // 2 for fast
 	itemsel: 0,
 	lastdir: 0,
+	gravity: 0,
 	itemCounts: []
 }
 
@@ -133,14 +134,18 @@ function step(sc) {
 		player.vx *= change;
 		player.vy *= change;
 	}
-//	player.vx = velChange(player.vx, player.drag, 2);
-//	player.vy = velChange(player.vy, player.drag, 2);
 	if (!(controls.place & 1)) {
 		let cdx = (controls.dire & 1) - (controls.dirw & 1);
 		let cdy = (controls.dirs & 1) - (controls.dirn & 1);
 		let bofum = [1, 1.4][+(cdx != 0 && cdy != 0)];
 		player.vx += cdx / 8 / bofum * player.accel;
 		player.vy += cdy / 8 / bofum * player.accel;
+		if (player.gravity) {
+			player.vy += player.gravity / 8;
+			if ((controls.dirn & 1) && controls.dirn < 10) {
+				player.vy = -1;
+			}
+		}
 	}
 	movePlayer();
 	clearWcol((player.x & 127) ^ 64);
@@ -183,8 +188,8 @@ function drawInventory() {
 }
 
 function draw() { // i don't know what these stand for, even though i just made them
-	let ts = 8; // does what the acronym stand for matter
-	ts = 16 - 2 * Math.sqrt(player.vx ** 2 + player.vy ** 2);
+	let ts = 16; // does what the acronym stand for matter
+//	ts = 16 - 2 * Math.sqrt(player.vx ** 2 + player.vy ** 2);
 	let xba = canvas.width / ts / 2; // what truly matters in life?
 	let yba = canvas.height / ts / 2; // not the acronym
 	// but ts is tile width/height in pixels
@@ -319,6 +324,13 @@ function hcSetEntities(ua, i) {
 	}
 	return i;
 }
+function hcSpell(ua, i) {
+	let spell = ua[i]; ++i;
+	if (spell == 0) {
+		player.gravity = ua[i]; ++i;
+	}
+	return i;
+}
 
 ws.onmessage = function(e) {
 //	console.log(e);
@@ -335,6 +347,9 @@ ws.onmessage = function(e) {
 			break;
 		case 1:
 			i = hcSetEntities(ua, i);
+			break;
+		case 2:
+			i = hcSpell(ua, i);
 			break;
 		}
 	}

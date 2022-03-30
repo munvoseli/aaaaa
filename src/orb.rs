@@ -26,11 +26,22 @@ pub fn cast_from_runes(world: &mut World, flavor: u8, x: i32, y: i32) {
 		if (t | 3) != 0x8f { continue; }
 		let card = t ^ 0x8c;
 		let i = card * 3 + flavor;
+//		let mut comque: Vec<u8> = Vec::new();
 		match i {
 		0 => { // gravity
 			for player in &mut world.players {
-				if (player.pos.x - x).abs() > 3 || (player.pos.y - y).abs() > 3 { continue; }
-//				player.comque.push();
+				if (player.pos.x - x).abs() > 5 || (player.pos.y - y).abs() > 5 { continue; }
+				player.comque.push(2);
+				player.comque.push(0);
+				player.comque.push(1);
+			}
+		},
+		1 => { // gravity
+			for player in &mut world.players {
+				if (player.pos.x - x).abs() > 5 || (player.pos.y - y).abs() > 5 { continue; }
+				player.comque.push(2);
+				player.comque.push(0);
+				player.comque.push(0);
 			}
 		},
 		_ => {
@@ -52,8 +63,8 @@ impl Orb {
 				suby: (128 + v.1 * 112) as u8
 			},
 			v: Vel {
-				x: v.0 * 32,
-				y: v.1 * 32
+				x: v.0 * 128,
+				y: v.1 * 128
 			},
 			age: 0
 		}
@@ -63,7 +74,7 @@ impl Orb {
 		loop {
 			if i >= world.orbs.len() { break; }
 			let mut orb = &mut world.orbs[i];
-			if orb.age >= 200 {
+			if orb.age >= 100 {
 				world.orbs.remove(i);
 				continue;
 			}
@@ -80,8 +91,8 @@ impl Orb {
 					let s = (t as i32 & 2) - 1;
 					let dx = (t as i32 & 1) * -s;
 					let dy = ((t as i32 & 1) ^ 1) * s;
-					orb.v.x = dx * 32;
-					orb.v.y = dy * 32;
+					orb.v.x = dx * 128;
+					orb.v.y = dy * 128;
 					orb.pos.subx = (128 + dx * 112) as u8;
 					orb.pos.suby = (128 + dy * 112) as u8;
 					if orb.flavor == 0 {
@@ -97,6 +108,7 @@ impl Orb {
 			} else if (t | 3) == 0x8f {
 				let flava = world.orbs[i].flavor;
 				cast_from_runes(world, flava, x, y);
+				world.orbs[i].age = 100;
 			}
 			i += 1;
 		}

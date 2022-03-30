@@ -80,7 +80,7 @@ fn tick_step(world: &mut World, ticki: u32) {
 }
 
 fn net_loop(world: Amworld) {
-	let tcp_server = std::net::TcpListener::bind("127.0.0.1:3012").unwrap();
+	let tcp_server = std::net::TcpListener::bind("0.0.0.0:3012").unwrap();
 	println!("net_loop called");
 	for stream in tcp_server.incoming() {
 		let wrld = Arc::clone(&world);
@@ -121,7 +121,8 @@ fn net_loop(world: Amworld) {
 						let mut world = wrld.lock().unwrap();
 //						println!("received bin data of length {}", v.len());
 						let now = std::time::Instant::now();
-						let rv: Vec<u8> = handle_message(&v, &mut world, pid);
+						let mut rv: Vec<u8> = handle_message(&v, &mut world, pid);
+						rv.append(&mut world.players[pid].comque);
 						wsock.write_message(tungstenite::Message::Binary(rv)).unwrap();
 						let elapsed = now.elapsed().as_millis();
 						if elapsed > 100 {

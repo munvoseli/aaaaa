@@ -25,15 +25,15 @@ impl World {
 			if i >= self.chunks.len() { break; }
 			let x = self.chunks[i].x >> 7;
 			let y = self.chunks[i].y >> 7;
+			if self.chunks[i].modified {
+				println!("saving chunk");
+				self.chunks[i].save();
+			}
 			for player in &self.players {
 				if (x - (player.pos.x >> 7)).abs() <= 1 && (y - (player.pos.y >> 7)).abs() <= 1 {
 					i += 1;
 					continue 'chunkboi;
 				}
-			}
-			if self.chunks[i].modified {
-				println!("saving chunk");
-				self.chunks[i].save();
 			}
 			self.chunks.remove(i);
 		}

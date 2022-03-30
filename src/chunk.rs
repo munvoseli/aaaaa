@@ -12,9 +12,9 @@ pub struct Chunk {
 impl Chunk {
 	fn generate_new(cells: &mut [u8; 128*128]) {
 		let mut rng = rand::thread_rng();
-		let die = Uniform::from(127..=129);
+//		let die = Uniform::from(127..=129);
 		let mut i = 0;
-		let mut weights: [u8; 129*129] = unsafe { std::mem::uninitialized() };
+		let mut weights: [u8; 129*129] = unsafe { std::mem::MaybeUninit::uninit().assume_init() };
 		weights[0] = 128;
 		weights[128] = 128;
 		weights[128 * 129] = 128;
@@ -52,7 +52,7 @@ impl Chunk {
 				break;
 			}
 		}
-		for i in 0..3 {
+		for _ in 0..3 {
 		for y in 0..128 {
 		for x in 0..128 {
 			weights[y * 129 + x] =
