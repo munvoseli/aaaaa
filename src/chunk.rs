@@ -8,14 +8,65 @@ pub struct Chunk {
 	pub modified: bool
 }
 
+
 impl Chunk {
 	fn generate_new(cells: &mut [u8; 128*128]) {
 		let mut rng = rand::thread_rng();
-		let die = Uniform::from(0..5);
+		let die = Uniform::from(127..=129);
 		let mut i = 0;
+		let mut weights: [u8; 129*129] = unsafe { std::mem::uninitialized() };
+		weights[0] = 128;
+		weights[128] = 128;
+		weights[128 * 129] = 128;
+		weights[128 * 130] = 128;
+		let die = Uniform::from(-5..=5);
+		let mut width = 128;
+		loop {
+			let mut y = 0;
+			loop {
+			let mut x = 0;
+			loop {
+				let v00 = weights[y * 129 + x] as i16;
+				let v20 = weights[y * 129 + x + width] as i16;
+				let v02 = weights[(y + width) * 129 + x] as i16;
+				let v22 = weights[(y + width) * 129 + x + width] as i16;
+
+				let v10 = (v00 + v20) / 2 + die.sample(&mut rng) as i16;
+				let v21 = (v20 + v22) / 2 + die.sample(&mut rng) as i16;
+				let v01 = (v00 + v02) / 2 + die.sample(&mut rng) as i16;
+				let v12 = (v02 + v22) / 2 + die.sample(&mut rng) as i16;
+				let v11 = (v00 + v02 + v20 + v22) / 4 + die.sample(&mut rng) as i16;
+				weights[(y + width/2) * 129 + x]           = v10 as u8;
+				weights[(y + width/2) * 129 + x + width]   = v12 as u8;
+				weights[y * 129 + x + width/2]             = v01 as u8;
+				weights[(y + width) * 129 + x + width/2]   = v21 as u8;
+				weights[(y + width/2) * 129 + x + width/2] = v11 as u8;
+				x += width;
+				if x == 128 { break; }
+			}
+			y += width;
+			if y == 128 { break; }
+			}
+			width /= 2;
+			if width == 1 {
+				break;
+			}
+		}
+		for i in 0..3 {
 		for y in 0..128 {
 		for x in 0..128 {
-			cells[i] = if (x - 64) * (x - 64) + (y - 64) * (y - 64) > 32 * 64 { 0x80 } else { 0x81 };
+			weights[y * 129 + x] =
+				weights[y * 129 + x] / 4 +
+				weights[y * 129 + x + 1] / 4 +
+				weights[y * 129 + x + 129] / 4 +
+				weights[y * 129 + x + 130] / 4;
+		}
+		}
+		}
+		for y in 0..128 {
+		for x in 0..128 {
+//			cells[i] = if (x - 64) * (x - 64) + (y - 64) * (y - 64) > 32 * 64 { 0x80 } else { 0x81 };
+			cells[i] = if weights[y * 129 + x] > 124 { 0x81 } else { 0x80 };
 			i += 1;
 		}
 		}

@@ -400,8 +400,6 @@ addEventListener("keyup", function(e) {
 }, false);
 addEventListener("keydown", function(e) {
 	if (e.repeat) return false;
-	console.log(e);
-	console.log(e.code, controls.place & 1);
 	if ((e.code == "KeyA" || e.code == "KeyS" || e.code == "KeyD" || e.code == "KeyF" || e.code == "KeyW") && (controls.place & 1)) {
 		let d = 0;
 		switch (e.code) {
