@@ -18,7 +18,7 @@ ws.binaryType = "arraybuffer";
 
 let worldData = new Uint8Array(128*128);
 
-let items = new Uint8Array([0x81,0 , 0x82,0 , 0x88,1 , 0x8c,0 , 0x90,1 , 0x94,1]);
+let items = new Uint8Array([0x81,0 , 0x82,0 , 0x88,1 , 0x8c,0 , 0x8f,0 , 0x90,1 , 0x94,1]);
 
 let player = {
 	x: 0, // float
@@ -27,11 +27,13 @@ let player = {
 	vy: 0,
 	drag: 1/64,
 	control: 1,
-	accel: .5, // 1 for fast,
-	maxv: .5, // 2 for fast
+	accel: .2, // 1 for fast,
+	maxv: .2, // 2 for fast
 	itemsel: 0,
 	lastdir: 0,
 	gravity: 0,
+	onGround: false,
+	ts: 16,
 	itemCounts: []
 }
 
@@ -70,6 +72,7 @@ function velChange(x, amount, cap) {
 }
 
 function deWorld(x, y) {
+	return 5;
 	let r = 5;
 	let mind = r;
 	for (let dy = Math.floor(y - r); dy <= y + r; ++dy)
@@ -97,6 +100,7 @@ function movePlayer() {
 	let steps = (Math.abs(player.vx) + Math.abs(player.vy)) * 4;
 	if (steps < 1) steps = 1;
 	if (steps > 30) steps = 16;
+	player.onGround = false;
 	for (let i = 0; i < steps; ++i) {
 		let opx = player.x;
 		let opy = player.y;
@@ -104,6 +108,7 @@ function movePlayer() {
 		player.y += player.vy / steps;
 		let de = deWorld(player.x, player.y) - radPlayer;
 		if (de < 0) {
+			player.onGround = true;
 			let nm = nmWorld(player.x, player.y);
 			player.x -= nm[0] * de;
 			player.y -= nm[1] * de;
@@ -142,7 +147,7 @@ function step(sc) {
 		player.vy += cdy / 8 / bofum * player.accel;
 		if (player.gravity) {
 			player.vy += player.gravity / 8;
-			if ((controls.dirn & 1) && controls.dirn < 10) {
+			if ((controls.dirn & 1) && controls.dirn < 10 && player.onGround) {
 				player.vy = -1;
 			}
 		}
@@ -155,6 +160,8 @@ function step(sc) {
 	if (sc % 4 == 0) {
 		qcSetloc();
 		qcGetEntities();
+	}
+	if (sc % 4 == 0) {
 		qcGetTiles(25 + Math.floor(2 * Math.max(Math.abs(player.vx), Math.abs(player.vy))));
 	}
 	qcSend();
@@ -188,7 +195,7 @@ function drawInventory() {
 }
 
 function draw() { // i don't know what these stand for, even though i just made them
-	let ts = 16; // does what the acronym stand for matter
+	let ts = player.ts; // does what the acronym stand for matter
 //	ts = 16 - 2 * Math.sqrt(player.vx ** 2 + player.vy ** 2);
 	let xba = canvas.width / ts / 2; // what truly matters in life?
 	let yba = canvas.height / ts / 2; // not the acronym
@@ -202,6 +209,11 @@ function draw() { // i don't know what these stand for, even though i just made 
 		if (tile < 0x82) {
 			ctx.beginPath();
 			ctx.fillStyle = tile == 0 ? "#000" : tile == 0x80 ? "#888480" : tile == 0x81 ? "#444" : "#ff0";
+			ctx.fillRect(Math.floor(cx), Math.floor(cy), Math.floor(cx + ts) - Math.floor(cx), Math.floor(cy + ts) - Math.floor(cy));
+			ctx.closePath();
+		} else if (tile >= 0xa0 && tile <= 0xa9) {
+			ctx.beginPath();
+			ctx.fillStyle = "#" + ["f0a", "f00", "fa0", "ff0", "0f0", "0af", "00f", "50f", "055"][tile ^ 0xa0];
 			ctx.fillRect(Math.floor(cx), Math.floor(cy), Math.floor(cx + ts) - Math.floor(cx), Math.floor(cy + ts) - Math.floor(cy));
 			ctx.closePath();
 		} else {
@@ -326,11 +338,26 @@ function hcSetEntities(ua, i) {
 }
 function hcSpell(ua, i) {
 	let spell = ua[i]; ++i;
-	if (spell == 0) {
+	switch (spell) {
+	case 0:
 		player.gravity = ua[i]; ++i;
+		break;
+	case 1:
+		if (ua[i]) {
+			player.maxv = 2;
+			player.accel = 1;
+			player.drag = 1/64;
+		} else {
+			player.maxv = .5;
+			player.accel = .5;
+			player.drag = 1/64;
+		}
+		++i;
+		break;
 	}
 	return i;
 }
+hcSpell([1,1]);
 
 ws.onmessage = function(e) {
 //	console.log(e);
@@ -353,7 +380,7 @@ ws.onmessage = function(e) {
 			break;
 		}
 	}
-//	console.log(codes);
+//	console.log(codes, ua.length);
 }
 
 
@@ -422,7 +449,6 @@ addEventListener("keydown", function(e) {
 		case "KeyS": d = 2; break;
 		case "KeyD": d = 1;
 		}
-		console.log(d);
 		breakOrPlaceBlock(d);
 	}
 	handleKey(e.code, 1);

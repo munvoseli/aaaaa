@@ -38,6 +38,9 @@ type Amworld = std::sync::Arc<std::sync::Mutex<World>>;
 
 #[tokio::main]
 async fn main() {
+	let h: i32 = -1;
+	let g: u32 = h as u32;
+	println!("{} {} {:#x} {:#x}", h, g, h, g);
 	let world: Amworld = Arc::new(Mutex::new(World::new()));
 	tick_loop(Arc::clone(&world));
 	{

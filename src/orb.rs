@@ -26,27 +26,37 @@ pub fn cast_from_runes(world: &mut World, flavor: u8, x: i32, y: i32) {
 		if (t | 3) != 0x8f { continue; }
 		let card = t ^ 0x8c;
 		let i = card * 3 + flavor;
-//		let mut comque: Vec<u8> = Vec::new();
+		let mut comque: Vec<u8> = Vec::new();
 		match i {
-		0 => { // gravity
-			for player in &mut world.players {
-				if (player.pos.x - x).abs() > 5 || (player.pos.y - y).abs() > 5 { continue; }
-				player.comque.push(2);
-				player.comque.push(0);
-				player.comque.push(1);
-			}
+		0 => { // white gravity
+			comque.push(2);
+			comque.push(0);
+			comque.push(1);
 		},
-		1 => { // gravity
-			for player in &mut world.players {
-				if (player.pos.x - x).abs() > 5 || (player.pos.y - y).abs() > 5 { continue; }
-				player.comque.push(2);
-				player.comque.push(0);
-				player.comque.push(0);
-			}
+		1 => { // blue gravity
+			comque.push(2);
+			comque.push(0);
+			comque.push(0);
 		},
+		9 => { // white speed
+			comque.push(2);
+			comque.push(1);
+			comque.push(1);
+		},
+		10 => { // blue speed
+			comque.push(2);
+			comque.push(1);
+			comque.push(0);
+		}
 		_ => {
 			println!("unknown spell");
 		}
+		}
+		if comque.len() > 0 {
+			for player in &mut world.players {
+				if (player.pos.x - x).abs() > 5 || (player.pos.y - y).abs() > 5 { continue; }
+				player.comque.append(&mut comque);
+			}
 		}
 	}
 }
