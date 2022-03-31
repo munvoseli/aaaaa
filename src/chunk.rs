@@ -81,21 +81,22 @@ impl Chunk {
 //	}
 	fn generate_noise_bq(cx: i32, cy: i32, seed: u32) -> [i32; 128*128] {
 		const cw: i32 = 128;
-		const bw: i32 = 128 * 3 + 1;
+		const RES: i32 = 8;
+		const bw: i32 = 128 + RES + RES + 1;
 		let mut data: [i32; bw as usize * bw as usize] = [0; bw as usize * bw as usize]; // represents points on edges of tiles
 		{ // fill set points
-			for y in (0..=3*cw).step_by(cw as usize) {
-			for x in (0..=3*cw).step_by(cw as usize) {
+			for y in (0..bw).step_by(RES as usize) {
+			for x in (0..bw).step_by(RES as usize) {
 				data[(y * bw + x) as usize] = coord_hash(x + cx, y + cy, seed) as i32 / 16; // offset does not matter now
 			}}
 		}
 		// loop de loop
-		let mut l = cw / 2;
+		let mut l = RES / 2;
 		loop {
 			if l == 0 { break; }
 			// diagonal
-			for y in (cw-l..=2*cw+l).step_by(2*l as usize) {
-			for x in (cw-l..=2*cw+l).step_by(2*l as usize) {
+			for y in (RES-l..=RES+cw+l).step_by(2*l as usize) {
+			for x in (RES-l..=RES+cw+l).step_by(2*l as usize) {
 				let v0 = data[((y - l) * bw + x - l) as usize];
 				let v1 = data[((y + l) * bw + x - l) as usize];
 				let v2 = data[((y - l) * bw + x + l) as usize];
@@ -103,8 +104,8 @@ impl Chunk {
 				data[(y * bw + x) as usize] = v0 / 4 + v1 / 4 + v2 / 4 + v3 / 4;
 			}}
 			// orthogonal a
-			for y in (cw-l..=2*cw+l).step_by(2*l as usize) {
-			for x in (cw..=2*cw).step_by(2*l as usize) {
+			for y in (RES-l..=RES+cw+l).step_by(2*l as usize) {
+			for x in (RES..=RES+cw).step_by(2*l as usize) {
 				let v0 = data[((y    ) * bw + x - l) as usize];
 				let v1 = data[((y + l) * bw + x    ) as usize];
 				let v2 = data[((y - l) * bw + x    ) as usize];
@@ -112,8 +113,8 @@ impl Chunk {
 				data[(y * bw + x) as usize] = v0 / 4 + v1 / 4 + v2 / 4 + v3 / 4;
 			}}
 			// orthogonal b
-			for y in (cw..=2*cw).step_by(2*l as usize) {
-			for x in (cw-l..=2*cw+l).step_by(2*l as usize) {
+			for y in (RES..=RES+cw).step_by(2*l as usize) {
+			for x in (RES-l..=RES+cw+l).step_by(2*l as usize) {
 				let v0 = data[((y    ) * bw + x - l) as usize];
 				let v1 = data[((y + l) * bw + x    ) as usize];
 				let v2 = data[((y - l) * bw + x    ) as usize];
@@ -126,7 +127,7 @@ impl Chunk {
 		let mut i = 0;
 		for y in 0..128 {
 		for x in 0..128 {
-			let g = ((y + cw) * bw + (x + cw)) as usize;
+			let g = ((y + RES) * bw + (x + RES)) as usize;
 			td[i] = data[g] / 4 + data[g+1] / 4 + data[g+(bw as usize)] / 4 + data[g+(bw as usize)+1] / 4;
 			i += 1;
 		}}

@@ -26,7 +26,7 @@ impl World {
 			let x = self.chunks[i].x >> 7;
 			let y = self.chunks[i].y >> 7;
 			if self.chunks[i].modified {
-				println!("saving chunk");
+				println!("saving chunk {} {}", x, y);
 				self.chunks[i].save();
 			}
 			for player in &self.players {
