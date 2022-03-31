@@ -72,7 +72,6 @@ function velChange(x, amount, cap) {
 }
 
 function deWorld(x, y) {
-	return 5;
 	let r = 5;
 	let mind = r;
 	for (let dy = Math.floor(y - r); dy <= y + r; ++dy)
