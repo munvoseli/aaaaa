@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::{Write, Read};
-use rand::distributions::{Distribution, Uniform};
-use rand::SeedableRng;
+//use rand::distributions::{Distribution, Uniform};
+//use rand::SeedableRng;
 pub struct Chunk {
 	pub x: i32,
 	pub y: i32,
@@ -172,60 +172,60 @@ impl Chunk {
 ////		}
 //		weights
 //	}
-	fn generate_noise(range: std::ops::RangeInclusive<i32>, seed: u64) -> [i32; 129*129] {
-		let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
-//		let die = Uniform::from(127..=129);
-		let mut weights: [i32; 129*129] = unsafe { std::mem::MaybeUninit::uninit().assume_init() };
-		weights[0] = 0;
-		weights[128] = 0;
-		weights[128 * 129] = 0;
-		weights[128 * 130] = 0;
-		let die = Uniform::from(range);
-		let mut width = 128;
-		loop {
-			let mut y = 0;
-			loop {
-			let mut x = 0;
-			loop {
-				let v00 = weights[y * 129 + x];
-				let v20 = weights[y * 129 + x + width];
-				let v02 = weights[(y + width) * 129 + x];
-				let v22 = weights[(y + width) * 129 + x + width];
-
-				let v10 = (v00 + v20) / 2 + die.sample(&mut rng);
-				let v21 = (v20 + v22) / 2 + die.sample(&mut rng);
-				let v01 = (v00 + v02) / 2 + die.sample(&mut rng);
-				let v12 = (v02 + v22) / 2 + die.sample(&mut rng);
-				let v11 = (v00 + v02 + v20 + v22) / 4 + die.sample(&mut rng);
-				weights[(y + width/2) * 129 + x]           = v10;
-				weights[(y + width/2) * 129 + x + width]   = v12;
-				weights[y * 129 + x + width/2]             = v01;
-				weights[(y + width) * 129 + x + width/2]   = v21;
-				weights[(y + width/2) * 129 + x + width/2] = v11;
-				x += width;
-				if x == 128 { break; }
-			}
-			y += width;
-			if y == 128 { break; }
-			}
-			width /= 2;
-			if width == 1 {
-				break;
-			}
-		}
-		for _ in 0..4 {
-		for y in 0..128 {
-		for x in 0..128 {
-			weights[y * 129 + x] =
-				weights[y * 129 + x] / 4 +
-				weights[y * 129 + x + 1] / 4 +
-				weights[y * 129 + x + 129] / 4 +
-				weights[y * 129 + x + 130] / 4;
-		}
-		}
-		}
-		weights
-	}
+//	fn generate_noise(range: std::ops::RangeInclusive<i32>, seed: u64) -> [i32; 129*129] {
+//		let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+////		let die = Uniform::from(127..=129);
+//		let mut weights: [i32; 129*129] = unsafe { std::mem::MaybeUninit::uninit().assume_init() };
+//		weights[0] = 0;
+//		weights[128] = 0;
+//		weights[128 * 129] = 0;
+//		weights[128 * 130] = 0;
+//		let die = Uniform::from(range);
+//		let mut width = 128;
+//		loop {
+//			let mut y = 0;
+//			loop {
+//			let mut x = 0;
+//			loop {
+//				let v00 = weights[y * 129 + x];
+//				let v20 = weights[y * 129 + x + width];
+//				let v02 = weights[(y + width) * 129 + x];
+//				let v22 = weights[(y + width) * 129 + x + width];
+//
+//				let v10 = (v00 + v20) / 2 + die.sample(&mut rng);
+//				let v21 = (v20 + v22) / 2 + die.sample(&mut rng);
+//				let v01 = (v00 + v02) / 2 + die.sample(&mut rng);
+//				let v12 = (v02 + v22) / 2 + die.sample(&mut rng);
+//				let v11 = (v00 + v02 + v20 + v22) / 4 + die.sample(&mut rng);
+//				weights[(y + width/2) * 129 + x]           = v10;
+//				weights[(y + width/2) * 129 + x + width]   = v12;
+//				weights[y * 129 + x + width/2]             = v01;
+//				weights[(y + width) * 129 + x + width/2]   = v21;
+//				weights[(y + width/2) * 129 + x + width/2] = v11;
+//				x += width;
+//				if x == 128 { break; }
+//			}
+//			y += width;
+//			if y == 128 { break; }
+//			}
+//			width /= 2;
+//			if width == 1 {
+//				break;
+//			}
+//		}
+//		for _ in 0..4 {
+//		for y in 0..128 {
+//		for x in 0..128 {
+//			weights[y * 129 + x] =
+//				weights[y * 129 + x] / 4 +
+//				weights[y * 129 + x + 1] / 4 +
+//				weights[y * 129 + x + 129] / 4 +
+//				weights[y * 129 + x + 130] / 4;
+//		}
+//		}
+//		}
+//		weights
+//	}
 	fn generate_new(cells: &mut [u8; 128*128], wx: i32, wy: i32) {
 		let weights = Self::generate_noise_bq(wx, wy, 0);
 		let colors = Self::generate_noise_bq(wx, wy, 1);

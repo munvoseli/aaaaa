@@ -28,6 +28,7 @@ impl World {
 			if self.chunks[i].modified {
 				println!("saving chunk {} {}", x, y);
 				self.chunks[i].save();
+				self.chunks[i].modified = false;
 			}
 			for player in &self.players {
 				if (x - (player.pos.x >> 7)).abs() <= 1 && (y - (player.pos.y >> 7)).abs() <= 1 {

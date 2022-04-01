@@ -29,7 +29,7 @@ use crate::player::Player;
 use crate::orb::Orb;
 use crate::player::Entpos;
 use crate::player::Inventory;
-use crate::orb::Vel;
+//use crate::orb::Vel;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -72,12 +72,12 @@ fn tick_loop(world: Amworld) {
 fn tick_step(world: &mut World, ticki: u32) {
 	if ticki == 0 {
 		world.unload_unused_chunks();
-		world.orbs.push(Orb {
-			flavor: 0,
-			pos: Entpos { x: 0, y: 0, subx: 128, suby: 240 },
-			v: Vel { x: 0, y: 32 },
-			age: 0
-		});
+//		world.orbs.push(Orb {
+//			flavor: 0,
+//			pos: Entpos { x: 0, y: 0, subx: 128, suby: 240 },
+//			v: Vel { x: 0, y: 32 },
+//			age: 0
+//		});
 	}
 	Orb::step(world);
 }
@@ -152,9 +152,10 @@ fn handle_message(v: &Vec<u8>, world: &mut World, pid: usize) -> Vec<u8> {
 		let mut rv = match code {
 		0 => hc_get_tiles(&mut i, v, world),
 		1 => hc_set_loc(&mut i, v, world, pid),
-		2 => hc_break(&mut i, v, world),
+		2 => hc_break(&mut i, v, world, pid),
 		3 => hc_get_entities(world, pid),
-		4 => hc_place_tile(&mut i, v, world),
+		4 => hc_place_tile(&mut i, v, world, pid),
+		5 => hc_get_inventory(world, pid),
 		_ => Vec::new()
 		};
 		sc.append(&mut rv);
@@ -222,9 +223,17 @@ fn hc_set_loc(i: &mut usize, v: &Vec<u8>, world: &mut World, pid: usize) -> Vec<
 	Vec::new()
 }
 
-fn hc_break(i: &mut usize, v: &Vec<u8>, world: &mut World) -> Vec<u8> {
+fn item_from_tile(t: u8) -> u8 {
+	let nt = t & 0xfc;
+	if nt == 0x88 || nt == 0x90 || nt == 0x94 { return nt; }
+	t
+}
+
+fn hc_break(i: &mut usize, v: &Vec<u8>, world: &mut World, pid: usize) -> Vec<u8> {
 	let x = read_as_int(*i, v); *i += 4;
 	let y = read_as_int(*i, v); *i += 4;
+	let t = world.get_tile(x, y);
+	world.players[pid].inventory.put(item_from_tile(t));
 	world.set_tile(x, y, 0x80);
 	Vec::new()
 }
@@ -252,10 +261,24 @@ fn hc_get_entities(world: &mut World, pid: usize) -> Vec<u8> {
 	rv
 }
 
-fn hc_place_tile(i: &mut usize, v: &Vec<u8>, world: &mut World) -> Vec<u8> {
+fn hc_place_tile(i: &mut usize, v: &Vec<u8>, world: &mut World, pid: usize) -> Vec<u8> {
 	let x = read_as_int(*i, v); *i += 4;
 	let y = read_as_int(*i, v); *i += 4;
 	let t = v[*i]; *i += 1;
-	world.set_tile(x, y, t);
+	let success = world.players[pid].inventory.rem(item_from_tile(t)); // may have bad things with directional
+	if success {
+		world.set_tile(x, y, t);
+	}
 	Vec::new()
+}
+
+fn hc_get_inventory(world: &mut World, pid: usize) -> Vec<u8> {
+	let mut rv: Vec<u8> = Vec::new();
+	rv.push(4);
+	rv.push(world.players[pid].inventory.items.len() as u8);
+	for boi in &world.players[pid].inventory.items {
+		append_int(&mut rv, boi.0 as i32);
+		rv.push(boi.1);
+	}
+	rv
 }

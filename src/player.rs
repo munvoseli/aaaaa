@@ -28,7 +28,7 @@ impl Entpos {
 }
 
 pub struct Inventory {
-	items: Vec<(u32, u8)>
+	pub items: Vec<(u32, u8)>
 }
 
 impl Inventory {
