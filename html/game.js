@@ -13,7 +13,7 @@ let entities = [];
 let radPlayer = 1/2;
 let radOrb = 1/3;
 
-let ws = new WebSocket("ws://" + location.host + ":3012");
+let ws = new WebSocket("ws://" + location.host + '/webs');
 ws.binaryType = "arraybuffer";
 
 let worldData = new Uint8Array(128*128);

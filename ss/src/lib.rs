@@ -74,11 +74,19 @@ where F: (Fn(&mut Request<Incoming>) -> Potato) + std::marker::Send + 'static + 
 									Ok(upgraded) => {
 										let parts: hyper::upgrade::Parts<TokioIo<TcpStream>> = upgraded.downcast().unwrap();
 										let stream = parts.io.into_inner();
-										let mut wsock = tokio_tungstenite::accept_async(stream).await.unwrap();
+										//let mut wsock = tokio_tungstenite::accept_async(stream).await.unwrap();
+										let mut wsock = tokio_tungstenite::WebSocketStream::from_raw_socket(
+											stream,
+											tungstenite::protocol::Role::Server,
+											None).await;
 										use futures_util::sink::SinkExt;
 										use futures_util::stream::StreamExt;
 										loop {
-											let val = wsock.next().await.unwrap().unwrap();
+											let Some(Ok(val)) = wsock.next().await else {
+												println!("oh no.");
+												break;
+											};
+											// val: Message
 											let mmsg = { fws(val).clone() };
 											if let Some(msg) = mmsg {
 												wsock.send(msg).await.unwrap();
@@ -90,6 +98,7 @@ where F: (Fn(&mut Request<Incoming>) -> Potato) + std::marker::Send + 'static + 
 							});
 							return Ok(hyper::Response::builder()
 							.status(101)
+							.header("Connection", "Upgrade")
 							.header("Upgrade", "websocket")
 							.header("Sec-WebSocket-Accept", retkey)
 							.body(Full::new(Bytes::from("")))?);

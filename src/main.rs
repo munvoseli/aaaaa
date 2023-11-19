@@ -106,7 +106,6 @@ async fn start_server(world: Amworld) {
 					};
 					pid
 				};
-				let world = Arc::clone(&world);
 				return ss::Potato::WebSocketHandler(Box::new(move |msg| {
 					let world = Arc::clone(&world);
 					if let tungstenite::Message::Binary(v) = msg {
