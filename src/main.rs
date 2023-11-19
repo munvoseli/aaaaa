@@ -24,14 +24,16 @@ mod world;
 mod chunk;
 mod player;
 mod orb;
+mod hc;
+
 use crate::world::World;
 use crate::player::Player;
 use crate::orb::Orb;
 use crate::player::Entpos;
 use crate::player::Inventory;
+use crate::hc::handle_message;
 //use crate::orb::Vel;
 use std::sync::Arc;
-use std::sync::Mutex;
 
 type Amworld = std::sync::Arc<std::sync::Mutex<World>>;
 
@@ -41,14 +43,14 @@ async fn main() {
 	let h: i32 = -1;
 	let g: u32 = h as u32;
 	println!("{} {} {:#x} {:#x}", h, g, h, g);
-	let world: Amworld = Arc::new(Mutex::new(World::new()));
+	let world: Amworld = Arc::new(std::sync::Mutex::new(World::new()));
 	tick_loop(Arc::clone(&world));
 	{
 		let tw = Arc::clone(&world);
 		let mut w = tw.lock().unwrap();
 		(*w).set_tile(0, 0, 5);
 	}
-	net_loop(Arc::clone(&world));
+	start_server(Arc::clone(&world)).await;
 }
 
 fn tick_loop(world: Amworld) {
@@ -82,203 +84,74 @@ fn tick_step(world: &mut World, ticki: u32) {
 	Orb::step(world);
 }
 
-fn net_loop(world: Amworld) {
-	let tcp_server = std::net::TcpListener::bind("0.0.0.0:3012").unwrap();
-	println!("net_loop called");
-	for stream in tcp_server.incoming() {
-		let wrld = Arc::clone(&world);
-		println!("new stream from tcp server");
-		tokio::spawn(async move {
-			let mut world = wrld.lock().unwrap();
-			println!("spawned process for tcp server (mutex locked)");
-			let tile = world.get_tile(0, 0) + 1;
-			world.set_tile(0, 0, tile);
-//			println!("world tile 0 0 {}", world.get_tile(0, 0));
-			let callback = |_req: &tungstenite::handshake::server::Request,
-			response: tungstenite::handshake::server::Response| {
-				println!("new ws handshake");
-				Ok(response)
-			};
-			let mut wsock = tungstenite::accept_hdr(
-				stream.unwrap(), callback
-				).unwrap();
-			let pid = world.players.len();
-			world.players.push(Player {pos: Entpos {x: 0, y: 0, subx: 128, suby: 128}, comque: Vec::new(), inventory: Inventory::new()});
-			drop(world);
-			loop {
-				let msg = wsock.read_message();
-				match msg {
-					Err(_) => {
-						println!("closing websocket");
-						return;
-					},
-					_ => ()
-				}
-				let msg = msg.unwrap();
-				match msg {
-					tungstenite::Message::Text(h) => {
-						println!("received text data: {}", h);
-					},
-					tungstenite::Message::Binary(v) => {
-						let wrld = Arc::clone(&wrld);
-						let mut world = wrld.lock().unwrap();
-//						println!("received bin data of length {}", v.len());
-						let now = std::time::Instant::now();
-						let mut rv: Vec<u8> = handle_message(&v, &mut world, pid);
-						rv.append(&mut world.players[pid].comque);
-						wsock.write_message(tungstenite::Message::Binary(rv)).unwrap();
-						let elapsed = now.elapsed().as_millis();
-						if elapsed > 100 {
-							println!("{} {}", elapsed, world.chunks.len());
+
+async fn start_server(world: Amworld) {
+	println!("start_server");
+	ss::serve_blocking(3054, move | req: &mut hyper::Request<hyper::body::Incoming> | {
+		use hyper::Response;
+		use http_body_util::Full;
+		use hyper::body::Bytes;
+		let uri = &req.uri().path()[1..];
+		let world = Arc::clone(&world);
+		println!("main");
+		match uri {
+			"webs" => {
+				let pid = {
+					let world = Arc::clone(&world);
+					let pid = {
+						let mut world = world.lock().unwrap();
+						let pid = world.players.len();
+						world.players.push(Player {pos: Entpos {x: 0, y: 0, subx: 128, suby: 128}, comque: Vec::new(), inventory: Inventory::new()});
+						pid
+					};
+					pid
+				};
+				let world = Arc::clone(&world);
+				return ss::Potato::WebSocketHandler(Box::new(move |msg| {
+					let world = Arc::clone(&world);
+					if let tungstenite::Message::Binary(v) = msg {
+							let world = Arc::clone(&world);
+							let mut world = world.lock().unwrap();
+							let now = std::time::Instant::now();
+							let mut rv: Vec<u8> = handle_message(&v, &mut world, pid);
+							rv.append(&mut world.players[pid].comque);
+							//wsock.write(tungstenite::Message::Binary(rv)).unwrap();
+							let elapsed = now.elapsed().as_millis();
+							if elapsed > 100 {
+								println!("{} {}", elapsed, world.chunks.len());
+							}
+							let v2 = hc::handle_message(&v, &mut world, pid);
+							return Some(tungstenite::Message::Binary(v2));
+					}
+					None
+				}));
+			},
+			uri => {
+				let uri = if uri.len() < 2 { "index.html" } else { uri };
+				println!("New path: {}", uri);
+				let maybefile = std::fs::File::open(format!("html/{}", uri));
+				match maybefile {
+					Ok(mut file) => {
+						let mut buf = Vec::new();
+						std::io::Read::read_to_end(&mut file, &mut buf).unwrap();
+						if &uri[uri.len()-2..] == "js" {
+							ss::Potato::HTTPResponse(Response::builder()
+							.status(200)
+							.header("Content-Type", "application/javascript")
+							.body(Full::new(Bytes::from(buf))).unwrap()
+							)
+						} else {
+							ss::Potato::HTTPResponse(Response::new(Full::new(Bytes::from(buf))))
 						}
-						drop(world);
 					},
-					_ => {
-						println!("received non-bin non-text data");
+					Err(_) => {
+						ss::Potato::HTTPResponse(Response::builder()
+						.status(404)
+						.body(Full::new(Bytes::from("404 Eroor"))).unwrap())
 					}
 				}
 			}
-		});
-	}
-	println!("net_loop exiting");
-}
-
-fn handle_message(v: &Vec<u8>, world: &mut World, pid: usize) -> Vec<u8> {
-	let mut i: usize = 0; // client might crash server without command size checks
-	let mut sc: Vec<u8> = Vec::new();
-	loop {
-		let code: u8 = v[i];
-		i += 1;
-		let mut rv = match code {
-		0 => hc_get_tiles(&mut i, v, world),
-		1 => hc_set_loc(&mut i, v, world, pid),
-		2 => hc_break(&mut i, v, world, pid),
-		3 => hc_get_entities(world, pid),
-		4 => hc_place_tile(&mut i, v, world, pid),
-		5 => hc_get_inventory(world, pid),
-		_ => Vec::new()
-		};
-		sc.append(&mut rv);
-		if i == v.len() {
-			break;
 		}
-	}
-	return sc;
+	}).await;
 }
 
-fn read_as_int(i: usize, v: &Vec<u8>) -> i32 {
-//	(((v[i] as i32) >> 6) - 1) * (((v[i] & 127) as i32) << 24) | ((v[i + 1] as i32) << 16) | ((v[i + 2] as i32) << 8) | (v[i + 3] as i32)
-	i32::from_be_bytes([v[i], v[i+1], v[i+2], v[i+3]])
-}
-//fn int_into_vec(x: i32) -> Vec<u8> {
-//	vec!(((x >> 24) & 8) as u8, ((x >> 16) & 8) as u8, ((x >> 8) & 8) as u8, (x & 8) as u8)
-//}
-fn append_int(v: &mut Vec<u8>, x: i32) {
-	let bytes = x.to_be_bytes();
-	v.push(bytes[0]);
-	v.push(bytes[1]);
-	v.push(bytes[2]);
-	v.push(bytes[3]);
-//	v.push(((x >> 24)      ) as u8);
-//	v.push(((x >> 16) & 255) as u8);
-//	v.push(((x >>  8) & 255) as u8);
-//	v.push( (x        & 255) as u8);
-}
-
-fn hc_get_tiles(i: &mut usize, v: &Vec<u8>, world: &mut World) -> Vec<u8> {
-//	println!("{} {} {} {}", (v[*i] as i32) << 24, (v[*i + 1] as i32) << 16, (v[*i + 2] as i32) << 8, (v[*i + 3] as i32));
-	let x: i32 = read_as_int(*i, v);
-	*i += 4;
-	let y: i32 = read_as_int(*i, v);
-	*i += 4;
-	let mut r: i32 = v[*i] as i32;
-	if r > 64 { r = 63; }
-	*i += 1;
-	let mut rv: Vec<u8> = Vec::new();
-	rv.push(0);
-//	println!("{} {}", x, r);
-	append_int(&mut rv, x);
-	append_int(&mut rv, y);
-	rv.push((r & 255) as u8);
-	for wy in (y-r)..=(y+r) {
-	for wx in (x-r)..=(x+r) { // client can crash server with subtract overflow
-		rv.push(world.get_tile(wx, wy));
-	}
-	}
-	rv
-}
-
-fn hc_set_loc(i: &mut usize, v: &Vec<u8>, world: &mut World, pid: usize) -> Vec<u8> {
-	let ox = world.players[pid].pos.x;
-	let oy = world.players[pid].pos.y;
-	world.players[pid].pos.x = read_as_int(*i, v);
-	*i += 4;
-	world.players[pid].pos.y = read_as_int(*i, v);
-	*i += 4;
-	world.players[pid].pos.subx = v[*i];
-	*i += 1;
-	world.players[pid].pos.suby = v[*i];
-	*i += 1;
-	Player::do_move_checks(ox, oy, world, pid);
-	Vec::new()
-}
-
-fn item_from_tile(t: u8) -> u8 {
-	let nt = t & 0xfc;
-	if nt == 0x88 || nt == 0x90 || nt == 0x94 { return nt; }
-	t
-}
-
-fn hc_break(i: &mut usize, v: &Vec<u8>, world: &mut World, pid: usize) -> Vec<u8> {
-	let x = read_as_int(*i, v); *i += 4;
-	let y = read_as_int(*i, v); *i += 4;
-	let t = world.get_tile(x, y);
-	world.players[pid].inventory.put(item_from_tile(t));
-	world.set_tile(x, y, 0x80);
-	Vec::new()
-}
-
-fn hc_get_entities(world: &mut World, pid: usize) -> Vec<u8> {
-	let mut rv: Vec<u8> = Vec::new();
-	rv.push(1);
-	rv.push((world.players.len() - 1 + world.orbs.len()) as u8);
-	for i in 0..world.players.len() {
-		if i == pid { continue; }
-		rv.push(0);
-		append_int(&mut rv, world.players[i].pos.x);
-		append_int(&mut rv, world.players[i].pos.y);
-		rv.push(world.players[i].pos.subx);
-		rv.push(world.players[i].pos.suby);
-	}
-	for orb in &world.orbs {
-		rv.push(1);
-		append_int(&mut rv, orb.pos.x);
-		append_int(&mut rv, orb.pos.y);
-		rv.push(orb.pos.subx);
-		rv.push(orb.pos.suby);
-		rv.push(orb.flavor);
-	}
-	rv
-}
-
-fn hc_place_tile(i: &mut usize, v: &Vec<u8>, world: &mut World, pid: usize) -> Vec<u8> {
-	let x = read_as_int(*i, v); *i += 4;
-	let y = read_as_int(*i, v); *i += 4;
-	let t = v[*i]; *i += 1;
-	let success = world.players[pid].inventory.rem(item_from_tile(t)); // may have bad things with directional
-	if success {
-		world.set_tile(x, y, t);
-	}
-	Vec::new()
-}
-
-fn hc_get_inventory(world: &mut World, pid: usize) -> Vec<u8> {
-	let mut rv: Vec<u8> = Vec::new();
-	rv.push(4);
-	rv.push(world.players[pid].inventory.items.len() as u8);
-	for boi in &world.players[pid].inventory.items {
-		append_int(&mut rv, boi.0 as i32);
-		rv.push(boi.1);
-	}
-	rv
-}
