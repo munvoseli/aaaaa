@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>aaaaa create account</title>
+</head>
+<body>
+	<h1>create account</h1>
+	<p>bee sure to save your key in your browser or something</p>
+	<form method="POST" action="/" id="form">
+		<input name="username" placeholder=" Display name"><br>
+		<input name="password-display" placeholder=" Key" id="key"> <button type="button" id="agk">auto-generate key</button><br>
+		<input name="password" type="password" id="key-confirm" placeholder=" Confirm key">
+		<input type="submit">
+	</form>
+	<script>
+function g(s) {
+	return document.getElementById(s);
+}
+function randHex() {
+	return "0123456789abcdef"[Math.floor(Math.random() * 16)];
+}
+function randShort() {
+	return randHex() + randHex() + randHex() + randHex();
+}
+g("agk").addEventListener("click", function() {
+	let val = `bee-${randShort()}-${randShort()}-${randShort()}-${randShort()}`;
+	g("key").value = val;
+}, false);
+g("form").onsubmit = function(e) {
+	if (g("key").value != g("key-confirm").value) {
+		alert("Key and confirmation do not match");
+		return false;
+	}
+	return true;
+};
+	</script>
+</body>
+</html>
