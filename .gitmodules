@@ -1,0 +1,3 @@
+[submodule "ss"]
+	path = ss
+	url = https://github.com/munvoseli/i-want-to-websocket
