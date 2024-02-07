@@ -52,6 +52,7 @@ fn hc_get_tiles(i: &mut usize, v: &Vec<u8>, world: &mut World) -> Vec<u8> {
 	*i += 4;
 	let mut r: i32 = v[*i] as i32;
 	if r > 64 { r = 63; }
+	if r < 0 { r = 0; }
 	*i += 1;
 	let mut rv: Vec<u8> = Vec::new();
 	rv.push(0);
@@ -60,7 +61,7 @@ fn hc_get_tiles(i: &mut usize, v: &Vec<u8>, world: &mut World) -> Vec<u8> {
 	append_int(&mut rv, y);
 	rv.push((r & 255) as u8);
 	for wy in (y-r)..=(y+r) {
-	for wx in (x-r)..=(x+r) { // client can crash server with subtract overflow
+	for wx in (x-r)..=(x+r) {
 		rv.push(world.get_tile(wx, wy));
 	}
 	}
@@ -68,16 +69,21 @@ fn hc_get_tiles(i: &mut usize, v: &Vec<u8>, world: &mut World) -> Vec<u8> {
 }
 
 fn hc_set_loc(i: &mut usize, v: &Vec<u8>, world: &mut World, pid: usize) -> Vec<u8> {
-	let ox = world.players[pid].pos.x;
-	let oy = world.players[pid].pos.y;
-	world.players[pid].pos.x = read_as_int(*i, v);
-	*i += 4;
-	world.players[pid].pos.y = read_as_int(*i, v);
-	*i += 4;
-	world.players[pid].pos.subx = v[*i];
-	*i += 1;
-	world.players[pid].pos.suby = v[*i];
-	*i += 1;
+	let ox;
+	let oy;
+	{
+		let player = world.players.get_mut(&pid).unwrap();
+		ox = player.pos.x;
+		oy = player.pos.y;
+		player.pos.x = read_as_int(*i, v);
+		*i += 4;
+		player.pos.y = read_as_int(*i, v);
+		*i += 4;
+		player.pos.subx = v[*i];
+		*i += 1;
+		player.pos.suby = v[*i];
+		*i += 1;
+	}
 	Player::do_move_checks(ox, oy, world, pid);
 	Vec::new()
 }
@@ -92,7 +98,7 @@ fn hc_break(i: &mut usize, v: &Vec<u8>, world: &mut World, pid: usize) -> Vec<u8
 	let x = read_as_int(*i, v); *i += 4;
 	let y = read_as_int(*i, v); *i += 4;
 	let t = world.get_tile(x, y);
-	world.players[pid].inventory.put(item_from_tile(t));
+	world.players.get_mut(&pid).unwrap().inventory.put(item_from_tile(t));
 	world.set_tile(x, y, 0x80);
 	Vec::new()
 }
@@ -101,13 +107,14 @@ fn hc_get_entities(world: &mut World, pid: usize) -> Vec<u8> {
 	let mut rv: Vec<u8> = Vec::new();
 	rv.push(1);
 	rv.push((world.players.len() - 1 + world.orbs.len()) as u8);
-	for i in 0..world.players.len() {
-		if i == pid { continue; }
+	for p in &world.players {
+		if pid == *p.0 { continue; }
+		let p = p.1;
 		rv.push(0);
-		append_int(&mut rv, world.players[i].pos.x);
-		append_int(&mut rv, world.players[i].pos.y);
-		rv.push(world.players[i].pos.subx);
-		rv.push(world.players[i].pos.suby);
+		append_int(&mut rv, p.pos.x);
+		append_int(&mut rv, p.pos.y);
+		rv.push(p.pos.subx);
+		rv.push(p.pos.suby);
 	}
 	for orb in &world.orbs {
 		rv.push(1);
@@ -123,10 +130,13 @@ fn hc_get_entities(world: &mut World, pid: usize) -> Vec<u8> {
 fn hc_place_tile(i: &mut usize, v: &Vec<u8>, world: &mut World, pid: usize) -> Vec<u8> {
 	let x = read_as_int(*i, v); *i += 4;
 	let y = read_as_int(*i, v); *i += 4;
-	let t = v[*i]; *i += 1;
-	let success = world.players[pid].inventory.rem(item_from_tile(t)); // may have bad things with directional
-	if success {
-		world.set_tile(x, y, t);
+	let tnow = world.get_tile(x, y);
+	if tnow == 0x80 {
+		let t = v[*i]; *i += 1;
+		let success = world.players.get_mut(&pid).unwrap().inventory.rem(item_from_tile(t)); // may have bad things with directional
+		if success {
+			world.set_tile(x, y, t);
+		}
 	}
 	Vec::new()
 }
@@ -134,8 +144,8 @@ fn hc_place_tile(i: &mut usize, v: &Vec<u8>, world: &mut World, pid: usize) -> V
 fn hc_get_inventory(world: &mut World, pid: usize) -> Vec<u8> {
 	let mut rv: Vec<u8> = Vec::new();
 	rv.push(4);
-	rv.push(world.players[pid].inventory.items.len() as u8);
-	for boi in &world.players[pid].inventory.items {
+	rv.push(world.players[&pid].inventory.items.len() as u8);
+	for boi in &world.players[&pid].inventory.items {
 		append_int(&mut rv, boi.0 as i32);
 		rv.push(boi.1);
 	}

@@ -5,6 +5,11 @@ let ctx = canvas.getContext("2d");
 canvas.width = 600;
 canvas.height = 600;
 
+let invCanvas = document.getElementById("inventory-canvas");
+let ictx = invCanvas.getContext("2d");
+invCanvas.width = 32;
+invCanvas.height = 32;
+
 let spirk = document.createElement("canvas");
 let spctx = spirk.getContext("2d");
 
@@ -19,8 +24,8 @@ ws.binaryType = "arraybuffer";
 let worldData = new Uint8Array(128*128);
 
 let items = new Uint8Array([
-	0x81,0 , 0x82,0 , 0x88,1 , 0x8c,0 , 0x8f,0 , 0x90,1 , 0x94,1 ,
-	0xa0,0 , 0xa1,0 , 0xa2,0 , 0xa3,0 , 0xa4,0 , 0xa5,0 , 0xa6,0 , 0xa7,0 , 0xa8,0
+	0x81,0 , 0x82,0 , 0x88,61 , 0x8c,0 , 0x8f,0 , 0x90,1 , 0x94,1 ,
+	0xa0,0 , 0xa1,0 , 0xa2,0 , 0xa3,0 , 0xa4,61 , 0xa5,0 , 0xa6,0 , 0xa7,0 , 0xa8,0
 ]);
 let itemrows = [7, 9];
 let tilecolors = ["f0a", "f00", "fa0", "ff0", "0f0", "0af", "00f", "50f", "055"];
@@ -105,13 +110,23 @@ function movePlayer() {
 	if (steps < 1) steps = 1;
 	if (steps > 30) steps = 16;
 	player.onGround = false;
+	{
+		let de = deWorld(player.x, player.y);
+		if (de < .5) {
+			let nm = nmWorld(player.x, player.y);
+			player.vx += nm[0] * .01;//(player.x - opx) * steps;
+			player.vy += nm[1] * .01;//(player.y - opy) * steps;
+		}
+	}
 	for (let i = 0; i < steps; ++i) {
 		let opx = player.x;
 		let opy = player.y;
 		player.x += player.vx / steps;
 		player.y += player.vy / steps;
-		let de = deWorld(player.x, player.y) - radPlayer;
-		if (de < 0) {
+		let de = deWorld(player.x, player.y);
+		let radPlayer = 0.25;
+		if (de < radPlayer) {
+			de -= radPlayer;
 			player.onGround = true;
 			let nm = nmWorld(player.x, player.y);
 			player.x -= nm[0] * de;
@@ -177,33 +192,68 @@ function step(sc) {
 }
 
 function drawInventory() {
-	let hs = 8;
-	let s = hs * 2;
-	for (let i = 0; i < 2 * itemrows[0]; i += 2) {
-		let t = items[i];
-		ctx.drawImage(
-			spirk, (t & 15) << 3, (t >> 4) << 3, 8, 8,
-			i * hs, 0, s, s
-		);
-		ctx.fillStyle = "#fff";
-		ctx.fillRect(i * hs, s, s, hs);
+	let ctx = ictx;
+	let canvas = invCanvas;
+	ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+	let tl = canvas.width / 4;
+	let ul = tl / 8;
+
+	let ti = 0;
+	for (let i = 0; i < items.length; i += 2) {
+		let qty = items[i + 1];
+		if (qty == 0) continue;
+		let x0 = (ti % 4) * tl;
+		let y0 = Math.floor(ti / 4) * tl;
+		ti++;
+		if (items[i] >= 0xa0) // color tile
+		{
+			let ci = items[i] - 0xa0;
+			ctx.beginPath();
+			ctx.fillStyle = "#" + tilecolors[ci / 2];
+			ctx.fillRect(x0, y0, tl, tl);
+			ctx.closePath();
+		} else {
+			const sl = ul;
+			let t = items[i];
+			ctx.beginPath();
+			ctx.drawImage(
+				spirk,
+				(t & 15) * 8, (t >> 4) * 8, 8, 8,
+				x0, y0, tl, tl
+			);
+			ctx.closePath();
+		}
+		let h = Math.ceil(qty / 8) * ul;
+		ctx.beginPath();
+		ctx.globalCompositeOperation = "lighter"; // unfortunately does not overflow
+		ctx.fillStyle = '#777';
+		ctx.fillRect(x0, y0+h, tl, tl-h);
+		ctx.fillRect(x0+tl, y0 + h, -(qty % 8) * ul, -ul);
+		ctx.closePath();
+		ctx.globalCompositeOperation = "source-over";
 	}
-	for (let i = 0; i < 2 * itemrows[1]; i += 2) {
-		let t = items[i + 14];
-		ctx.fillStyle = "#" + tilecolors[i / 2];
-		ctx.fillRect(i * hs, 3 * hs, s, s);
-		ctx.fillStyle = "#fff";
-		ctx.fillRect(i * hs, 5 * hs, s, hs);
-	}
-	let col = player.itemsel < itemrows[0] ? player.itemsel : player.itemsel - itemrows[0];
-	let row = player.itemsel < itemrows[0] ? 0 : 1;
-	ctx.beginPath();
-	ctx.fillStyle = "#000";
-	ctx.moveTo(hs * (1 + col * 2), 3 * hs * row + s);
-	ctx.lineTo(hs * (2 + col * 2), 3 * hs * row + s + hs);
-	ctx.lineTo(hs * (    col * 2), 3 * hs * row + s + hs);
-	ctx.fill();
-	ctx.closePath();
+//	for (let i = 0; i < 2 * itemrows[0]; i += 2) {
+//		let t = items[i];
+//		ctx.fillStyle = "#fff";
+//		ctx.fillRect(i * hs, s, s, hs);
+//	}
+//	for (let i = 0; i < 2 * itemrows[1]; i += 2) {
+//		let t = items[i + 14];
+//		ctx.fillStyle = "#" + tilecolors[i / 2];
+//		ctx.fillRect(i * hs, 3 * hs, s, s);
+//		ctx.fillStyle = "#fff";
+//		ctx.fillRect(i * hs, 5 * hs, s, hs);
+//	}
+	//let col = player.itemsel < itemrows[0] ? player.itemsel : player.itemsel - itemrows[0];
+	//let row = player.itemsel < itemrows[0] ? 0 : 1;
+	//ctx.beginPath();
+	//ctx.fillStyle = "#000";
+	//ctx.moveTo(hs * (1 + col * 2), 3 * hs * row + s);
+	//ctx.lineTo(hs * (2 + col * 2), 3 * hs * row + s + hs);
+	//ctx.lineTo(hs * (    col * 2), 3 * hs * row + s + hs);
+	//ctx.fill();
+	//ctx.closePath();
 }
 
 function draw() { // i don't know what these stand for, even though i just made them
@@ -366,6 +416,12 @@ function hcSpell(ua, i) {
 		}
 		++i;
 		break;
+	}
+	return i;
+}
+function hcSetInventory(ua, i) {
+	let len = ua[i];
+	for (let j = 0; j < len; j += 2) {
 	}
 	return i;
 }

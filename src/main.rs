@@ -87,46 +87,91 @@ fn tick_step(world: &mut World, ticki: u32) {
 
 async fn start_server(world: Amworld) {
 	println!("start_server");
-	ss::serve_blocking(3054, move | req: &mut hyper::Request<hyper::body::Incoming> | {
+	let world = Arc::clone(&world);
+	ss::serve_blocking(3054, world, | req: hyper::Request<hyper::body::Incoming>, world: Amworld | async {
 		use hyper::Response;
 		use http_body_util::Full;
 		use hyper::body::Bytes;
+		use hyper::Method;
 		let uri = &req.uri().path()[1..];
-		let world = Arc::clone(&world);
+		let md = &req.method().clone();
 		println!("main");
-		match uri {
-			"webs" => {
+		match (md, uri) {
+			(&Method::GET, "webs") => {
 				let pid = {
 					let world = Arc::clone(&world);
 					let pid = {
 						let mut world = world.lock().unwrap();
-						let pid = world.players.len();
-						world.players.push(Player {pos: Entpos {x: 0, y: 0, subx: 128, suby: 128}, comque: Vec::new(), inventory: Inventory::new()});
-						pid
+						world.insert_player(Player {pos: Entpos {x: 0, y: 0, subx: 128, suby: 128}, comque: Vec::new(), inventory: Inventory::new()})
 					};
 					pid
 				};
-				return ss::Potato::WebSocketHandler(Box::new(move |msg| {
-					let world = Arc::clone(&world);
-					if let tungstenite::Message::Binary(v) = msg {
-							let world = Arc::clone(&world);
-							let mut world = world.lock().unwrap();
-							let now = std::time::Instant::now();
-							let mut rv: Vec<u8> = handle_message(&v, &mut world, pid);
-							rv.append(&mut world.players[pid].comque);
-							//wsock.write(tungstenite::Message::Binary(rv)).unwrap();
-							let elapsed = now.elapsed().as_millis();
-							if elapsed > 100 {
-								println!("{} {}", elapsed, world.chunks.len());
-							}
-							let v2 = hc::handle_message(&v, &mut world, pid);
-							return Some(tungstenite::Message::Binary(v2));
-					}
-					None
-				}));
+				let world2 = Arc::clone(&world);
+				return ss::Potato::WebSocketHandler(ss::WebSocketEventDriven {
+					message_handler: Box::new(move |msg| {
+						let world = Arc::clone(&world);
+						if let tungstenite::Message::Binary(v) = msg {
+								let world = Arc::clone(&world);
+								let mut world = world.lock().unwrap();
+								let now = std::time::Instant::now();
+								let mut rv: Vec<u8> = handle_message(&v, &mut world, pid);
+								rv.append(&mut world.players.get_mut(&pid).unwrap().comque);
+								let elapsed = now.elapsed().as_millis();
+								if elapsed > 100 {
+									println!("{} {}", elapsed, world.chunks.len());
+								}
+								return Some(tungstenite::Message::Binary(rv));
+						}
+						None
+					}),
+					quit_handler: Some(Box::new(move || {
+						let world = Arc::clone(&world2);
+						let mut world = world.lock().unwrap();
+						world.remove_player(pid);
+					})),
+					req: req,
+				});
 			},
-			uri => {
-				let uri = if uri.len() < 2 { "index.html" } else { uri };
+			(&Method::GET, "login"  ) => ss::respond_file("login.html"),
+			(&Method::GET, "create" ) => ss::respond_file("create_account.html"),
+			(&Method::GET, "game"   ) => ss::respond_file("game.html"),
+			(&Method::GET, "game.js") => ss::respond_file("game.js"),
+			(&Method::POST, "") => {
+				// read from post parameters
+				// respond with set-cookie
+				use http_body_util::BodyExt;
+				use hyper::body::Buf;
+				use bytes::BufMut;
+				let mut dst = Vec::new();
+				let body = req
+					.into_body()
+					.collect().await
+					.unwrap()
+					.aggregate() // now impl bytes::buf::Buf
+					.take(1000); // now bytes::buf::Take
+				dst.put(body);
+				let it = form_urlencoded::parse(&dst);
+				let mut pass = None;
+				let mut user = None;
+				for (a, b) in it {
+					match &*a {
+						"password" => { pass = Some(b.to_string()) },
+						"username" => { user = Some(b.to_string()) },
+						_ => {},
+					}
+				}
+				if pass == None {
+					ss::respond_file("home-unlog.html")
+				} else {
+					todo!();
+				}
+			},
+			(&Method::GET, "") => {
+				// read from post parameters
+				// respond with set-cookie
+				ss::respond_file("home-unlog.html")
+			},
+			(&Method::GET, uri) => {
 				println!("New path: {}", uri);
 				let maybefile = std::fs::File::open(format!("html/{}", uri));
 				match maybefile {
@@ -149,6 +194,11 @@ async fn start_server(world: Amworld) {
 						.body(Full::new(Bytes::from("404 Eroor"))).unwrap())
 					}
 				}
+			}
+			_ => {
+				ss::Potato::HTTPResponse(Response::builder()
+				.status(404)
+				.body(Full::new(Bytes::from("404 Eroor"))).unwrap())
 			}
 		}
 	}).await;

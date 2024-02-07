@@ -54,6 +54,7 @@ pub fn cast_from_runes(world: &mut World, flavor: u8, x: i32, y: i32) {
 		}
 		if comque.len() > 0 {
 			for player in &mut world.players {
+				let player = player.1;
 				if (player.pos.x - x).abs() > 5 || (player.pos.y - y).abs() > 5 { continue; }
 				player.comque.append(&mut comque);
 			}
@@ -83,19 +84,19 @@ impl Orb {
 		let mut i = 0;
 		loop {
 			if i >= world.orbs.len() { break; }
-			let mut orb = &mut world.orbs[i];
-			if orb.age >= 100 {
-				world.orbs.remove(i);
-				continue;
-			}
-			orb.pos.addsub(orb.v.x, orb.v.y);
-			orb.age += 1;
-			let x = orb.pos.x;
-			let y = orb.pos.y;
-			drop(orb);
+			let (x, y) = {
+				let orb = &mut world.orbs[i];
+				if orb.age >= 100 {
+					world.orbs.remove(i);
+					continue;
+				}
+				orb.pos.addsub(orb.v.x, orb.v.y);
+				orb.age += 1;
+				(orb.pos.x, orb.pos.y)
+			};
 			let t = world.get_tile(x, y);
 			if t >= 0x90 && t < 0x98 {
-				let mut orb = &mut world.orbs[i];
+				let orb = &mut world.orbs[i];
 				let tf = ((t >> 2) & 1) + 1;
 				if orb.flavor == 0 || tf == orb.flavor {
 					let s = (t as i32 & 2) - 1;

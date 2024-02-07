@@ -27,6 +27,7 @@ impl Entpos {
 	}
 }
 
+#[derive(Debug)]
 pub struct Inventory {
 	pub items: Vec<(u32, u8)>
 }
@@ -97,7 +98,7 @@ impl Player {
 		waveborn
 	}
 	pub fn do_move_checks(ox: i32, oy: i32, world: &mut World, pid: usize) {
-		let wavedied = Self::get_new_rects(world.players[pid].pos.x, world.players[pid].pos.y, ox, oy);
+		let wavedied = Self::get_new_rects(world.players[&pid].pos.x, world.players[&pid].pos.y, ox, oy);
 		for r in wavedied {
 		for y in r.1..=r.3 {
 		for x in r.0..=r.2 {
@@ -107,7 +108,7 @@ impl Player {
 				world.orbs.push(Orb::new(x, y, t ^ 0x88 ^ 2, 0));
 			}
 		}}}
-		let waveborn = Self::get_new_rects(ox, oy, world.players[pid].pos.x, world.players[pid].pos.y);
+		let waveborn = Self::get_new_rects(ox, oy, world.players[&pid].pos.x, world.players[&pid].pos.y);
 		for r in waveborn {
 		for y in r.1..=r.3 {
 		for x in r.0..=r.2 {

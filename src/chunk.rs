@@ -80,6 +80,7 @@ impl Chunk {
 //		v11
 //	}
 	fn generate_noise_bq(cx: i32, cy: i32, seed: u32) -> [i32; 128*128] {
+		#![allow(non_upper_case_globals)]
 		const cw: i32 = 128;
 		const RES: i32 = 8;
 		const bw: i32 = 128 + RES + RES + 1;
