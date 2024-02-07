@@ -1,0 +1,4 @@
+```
+mkdir data
+cargo run
+```
