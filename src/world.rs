@@ -2,20 +2,31 @@
 use crate::chunk::Chunk;
 use crate::player::Player;
 use crate::orb::Orb;
+use std::collections::HashMap;
 
 pub struct World {
 	pub chunks: Vec<Chunk>,
-	pub players: Vec<Player>,
-	pub orbs: Vec<Orb>
+	pub players: HashMap<usize, Player>,
+	pub orbs: Vec<Orb>,
+	pid: usize,
 }
 
 impl World {
 	pub fn new() -> Self {
 		Self {
 			chunks: Vec::new(),
-			players: Vec::new(),
-			orbs: Vec::new()
+			players: HashMap::new(),
+			orbs: Vec::new(),
+			pid: 0,
 		}
+	}
+	pub fn insert_player(&mut self, p: Player) -> usize {
+		self.pid += 1;
+		self.players.insert(self.pid, p);
+		self.pid
+	}
+	pub fn remove_player(&mut self, pid: usize) {
+		self.players.remove(&pid);
 	}
 	pub fn unload_unused_chunks(&mut self) {
 		let bfn = self.chunks.len();
@@ -31,6 +42,7 @@ impl World {
 				self.chunks[i].modified = false;
 			}
 			for player in &self.players {
+				let player = player.1;
 				if (x - (player.pos.x >> 7)).abs() <= 1 && (y - (player.pos.y >> 7)).abs() <= 1 {
 					i += 1;
 					continue 'chunkboi;
